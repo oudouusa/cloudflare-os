@@ -9,13 +9,19 @@
 //
 // Env:
 //   VITE_BACKEND_HOST=localhost:9000  Also pass --port 9000 to wrangler dev.
+//   WRANGLER_DEV_IP=0.0.0.0           Bind Wrangler inside a container.
+//   CFOS_DISABLE_DEV_WATCHERS=true    Build generated gatekeeper UIs once, without watchers.
+//   PUBLIC_BASE_URL=https://...       Seed each gatekeeper's externally reachable BASE_URL.
 
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { execFileSync, spawn } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "jsonc-parser";
-import { getWranglerPortFromBackendHost } from "./scripts/dev-server-config.js";
+import {
+  getGatekeeperBaseUrl,
+  getWranglerPortFromBackendHost,
+} from "./scripts/dev-server-config.js";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PACKAGES_DIR = join(ROOT, "packages");
@@ -90,6 +96,7 @@ const CONTEXT_GATEKEEPER_NAME = "gatekeeper-context";
 // reload; wrangler dev's `watch_dir: src` then re-bundles the worker.
 const devWatchers = [];
 let stoppingDevWatchers = false;
+const disableDevWatchers = process.env.CFOS_DISABLE_DEV_WATCHERS === "true";
 
 // Spawn a persistent watcher.
 function spawnDevWatcher(label, command, args) {
@@ -106,18 +113,22 @@ for (const gk of gatekeepers) {
   if (existsSync(join(gk.dir, "src", "configurator"))) {
     const script = join(ROOT, "scripts", "build-gatekeeper-configurator.mjs");
     execFileSync(process.execPath, [script, gk.dir, "--quiet"], { stdio: "inherit", cwd: ROOT });
-    spawnDevWatcher(
-      `configurator UI watcher for ${gk.name}`,
-      process.execPath,
-      [script, gk.dir, "--watch", "--quiet"],
-    );
+    if (!disableDevWatchers) {
+      spawnDevWatcher(
+        `configurator UI watcher for ${gk.name}`,
+        process.execPath,
+        [script, gk.dir, "--watch", "--quiet"],
+      );
+    }
   }
 
   // Single-file app UI (Vite bundle written to src/generated/app.txt by build-app.mjs).
   if (existsSync(join(gk.dir, "build-app.mjs"))) {
     const script = join(gk.dir, "build-app.mjs");
     execFileSync(process.execPath, [script], { stdio: "inherit", cwd: gk.dir });
-    spawnDevWatcher(`app UI watcher for ${gk.name}`, process.execPath, [script, "--watch"]);
+    if (!disableDevWatchers) {
+      spawnDevWatcher(`app UI watcher for ${gk.name}`, process.execPath, [script, "--watch"]);
+    }
   }
 }
 
@@ -198,6 +209,13 @@ for (const gk of gatekeepers) {
   const srcPath = join(gk.dir, "wrangler.jsonc");
   const config = parse(readFileSync(srcPath, "utf8"));
   config.build = { ...config.build, cwd: gk.dir };
+
+  if (process.env.PUBLIC_BASE_URL) {
+    config.vars = config.vars || {};
+    if (config.vars.BASE_URL === undefined) {
+      config.vars.BASE_URL = getGatekeeperBaseUrl(process.env.PUBLIC_BASE_URL, gk.name);
+    }
+  }
 
   const shared = SHARED_GATEKEEPER_CREDS[gk.name];
   if (shared && process.env[shared.id] && process.env[shared.secret]) {
@@ -319,6 +337,8 @@ if (backendHost) {
         "a Wrangler --port override.");
   }
 }
+const wranglerDevIp = process.env.WRANGLER_DEV_IP?.trim();
+if (wranglerDevIp) args.push("--ip", wranglerDevIp);
 console.log(`\nStarting: wrangler dev ${args.join(" ")}\n`);
 
 try {

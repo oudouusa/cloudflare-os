@@ -1,0 +1,19 @@
+model_list:
+  - model_name: glm-5.2
+    litellm_params:
+      model: openai/glm-5.2
+      api_base: os.environ/OPENCODE_GO_API_BASE
+      api_key: os.environ/OPENCODE_GO_API_KEY
+      use_chat_completions_api: true
+      max_parallel_requests: 1
+      max_retries: 0
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  disable_spend_logs: true
+
+litellm_settings:
+  drop_params: true
+  num_retries: 0
+  telemetry: false
+  turn_off_message_logging: true

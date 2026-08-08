@@ -1,0 +1,118 @@
+name: cloudflare-os-home
+
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  cloudflare-os-volume-init:
+    image: ${CFOS_IMAGE:-cloudflare-os-home:local}
+    pull_policy: never
+    user: 0:0
+    command:
+      - sh
+      - -c
+      - chown 1000:1000 /wrangler-state /pnpm-store
+    volumes:
+      - cloudflare_os_wrangler:/wrangler-state
+      - cloudflare_os_pnpm_store:/pnpm-store
+    network_mode: none
+    restart: "no"
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    security_opt:
+      - no-new-privileges:true
+    logging: *bounded-logging
+
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.95.0@sha256:af806882b7a6ced41658db5b6a7e98ed7b9b51d03b935e0417bf1c8552d688af
+    command:
+      - --config
+      - /app/config.yaml
+      - --host
+      - 0.0.0.0
+      - --port
+      - "4000"
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in ops/home/.env}
+      OPENCODE_GO_API_BASE: ${OPENCODE_GO_API_BASE:-https://opencode.ai/zen/go/v1}
+      OPENCODE_GO_API_KEY: ${OPENCODE_GO_API_KEY:?set OPENCODE_GO_API_KEY in ops/home/.env}
+      LITELLM_TELEMETRY: "False"
+      DO_NOT_TRACK: "1"
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    ports:
+      - 127.0.0.1:${LITELLM_HOST_PORT:-4001}:4000
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import os,urllib.request;
+          r=urllib.request.Request('http://127.0.0.1:4000/health/liveliness',headers={'Authorization':'Bearer '+os.environ['LITELLM_MASTER_KEY']});
+          raise SystemExit(0 if urllib.request.urlopen(r,timeout=5).status==200 else 1)
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 30s
+    logging: *bounded-logging
+
+  cloudflare-os:
+    build:
+      context: ../..
+      dockerfile: ops/home/Dockerfile
+    image: ${CFOS_IMAGE:-cloudflare-os-home:local}
+    environment:
+      CFOS_DISABLE_DEV_WATCHERS: "true"
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:8877}
+      TINI_KILL_PROCESS_GROUP: "1"
+      VITE_BACKEND_HOST: 127.0.0.1:8877
+      WRANGLER_DEV_IP: 0.0.0.0
+    volumes:
+      - cloudflare_os_wrangler:/workspace/.wrangler
+      - cloudflare_os_pnpm_store:/pnpm/store
+    ports:
+      - 127.0.0.1:${CFOS_HOST_PORT:-8877}:8877
+    depends_on:
+      cloudflare-os-volume-init:
+        condition: service_completed_successfully
+      litellm:
+        condition: service_healthy
+        restart: true
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:8877/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 8s
+      retries: 12
+      start_period: 90s
+    logging: *bounded-logging
+
+volumes:
+  cloudflare_os_wrangler:
+    name: ${CFOS_WRANGLER_VOLUME:-cloudflare-os-home-wrangler}
+  cloudflare_os_pnpm_store:
+    name: ${CFOS_PNPM_VOLUME:-cloudflare-os-home-pnpm-store}

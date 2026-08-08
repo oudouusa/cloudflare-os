@@ -1,0 +1,32 @@
+services:
+  mock-opencode:
+    image: node:22.14.0-bookworm-slim@sha256:1c18d9ab3af4585870b92e4dbc5cac5a0dc77dd13df1a5905cea89fc720eb05b
+    command:
+      - node
+      - /qa/mock-opencode.mjs
+    volumes:
+      - ./qa:/qa:ro
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:4100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+  litellm:
+    environment:
+      OPENCODE_GO_API_BASE: http://mock-opencode:4100/v1
+      OPENCODE_GO_API_KEY: mock-opencode-key
+    depends_on:
+      mock-opencode:
+        condition: service_healthy

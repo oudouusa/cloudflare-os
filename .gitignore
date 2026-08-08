@@ -21,6 +21,11 @@ packages/workshop-backend/src/generated/browser-export-runtime.txt
 .wrangler/
 .env
 
+# Home-pilot runtime evidence and local backup staging
+ops/home/evidence/
+ops/home/backups/
+ops/home/restore-work/
+
 # Local dev secrets (loaded by run-dev-server.js)
 .dev.vars*
 

@@ -1,0 +1,22 @@
+name: cloudflare-os-home-restore
+
+services:
+  cloudflare-os:
+    environment:
+      PUBLIC_BASE_URL: http://127.0.0.1:${CFOS_RESTORE_HOST_PORT:-18877}
+    ports: !override
+      - 127.0.0.1:${CFOS_RESTORE_HOST_PORT:-18877}:8877
+    volumes: !override
+      - cloudflare_os_wrangler:/workspace/.wrangler
+      - cloudflare_os_pnpm_store:/pnpm/store
+
+  litellm:
+    ports: !override
+      - 127.0.0.1:${LITELLM_RESTORE_HOST_PORT:-14001}:4000
+
+volumes:
+  cloudflare_os_wrangler:
+    external: true
+    name: ${CFOS_RESTORE_VOLUME:?set CFOS_RESTORE_VOLUME to the new verification volume}
+  cloudflare_os_pnpm_store:
+    name: ${CFOS_RESTORE_PNPM_VOLUME:-cloudflare-os-home-restore-pnpm-store}
