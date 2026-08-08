@@ -115,6 +115,7 @@ import { useActionEntries } from "./useActions";
 import { useAlwaysApproveTag } from "./useAlwaysApproveTag";
 import { useResolveAction } from "./useResolveAction";
 import { safeExternalUrl } from "./utils/safeExternalUrl";
+import { isComposingKeyEvent } from "./utils/imeComposition";
 import { useAuthenticatedApi } from "./AuthContext";
 import { useVendorBranding } from "./useVendorBranding";
 import OutOfCreditsModal from "./components/billing/OutOfCreditsModal";
@@ -3171,9 +3172,9 @@ export const ChatInput = ({
                 }
               }}
               onKeyDown={(e) => {
-                // Enter confirms Japanese input on iOS. It must not select a slash command or send
-                // the message while the browser still considers the keypress part of composition.
-                if (e.nativeEvent.isComposing || isComposingRef.current) return;
+                // Enter confirms Japanese input on iOS. The ref covers the active composition
+                // transaction; the event helper also handles Safari's legacy keyCode 229 signal.
+                if (isComposingRef.current || isComposingKeyEvent(e)) return;
                 if (slashCommandPicker.open && e.key === "Escape") {
                   e.preventDefault();
                   slashCommandPicker.dismiss();
@@ -6539,6 +6540,7 @@ function ChatInterface({
                             onChange={(e) => setRenamingInput(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                             onKeyDown={(e) => {
+                              if (isComposingKeyEvent(e)) return;
                               if (e.key === "Enter") {
                                 e.preventDefault();
                                 handleSaveListRename(chat.id);
@@ -6758,6 +6760,7 @@ function ChatInterface({
                         value={titleInput}
                         onChange={(e) => setTitleInput(e.target.value)}
                         onKeyDown={(e) => {
+                          if (isComposingKeyEvent(e)) return;
                           if (e.key === "Enter") handleSaveChatTitle();
                           if (e.key === "Escape") handleCancelTitleEdit();
                         }}
