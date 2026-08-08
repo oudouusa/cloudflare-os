@@ -151,7 +151,7 @@ Completed against official base
 | Final-image soak | 600 seconds pass on image `sha256:4bba…6752`; both service health states, restart counts, and container IDs remained unchanged |
 | Graceful stop | Initial restore stop reached the 30-second limit/exit 137; process-group forwarding then stopped in 1 second without a forced kill, followed by healthy restart, matching sentinel, and a 60-second strict soak |
 | Backup stop guard | Backup refuses exit 137/OOM before reading state; the clean-stop path created and checksummed the latest archive, restarted main healthy, and restored it into new r4 |
-| Tailscale private route | After explicit approval, one HTTPS 443 root route proxies to `127.0.0.1:8877`; Funnel count is zero; Windows tailnet client returns HTTP 200 and completes two independent WSS connections |
+| Tailscale private route | After explicit approval, one HTTPS 443 root route proxies to `127.0.0.1:8877`; Funnel count is zero; the Windows tailnet client returns HTTP 200 and completes two independent WSS connections, including after the owner-state backup/recreate |
 | GitHub fork/push | After explicit owner approval, `oudouusa/cloudflare-os` is verified as a fork of `cloudflare/cloudflare-os`; `main` and `home` were pushed without force or PR creation |
 | Real-env preflight | File mode 600, non-placeholder OpenCode/LiteLLM keys, exact OpenCode endpoint, and derived Tailscale origin all pass without disclosure |
 | Initial real OpenCode bridge | The first owner-approved GLM-5.2 pilot returned HTTP 200/text and one validated required function call. The owner then selected DeepSeek V4 Flash; this historical GLM result does not prove the replacement route. |
@@ -200,7 +200,7 @@ The Goal remains incomplete until these are evidenced.
 | 4 | Real owner-selected OpenCode Go normal and agent tool flow | Partial | Historical GLM proof and all four current DeepSeek mock bridge checks pass. Current real DeepSeek requests stop at HTTP 403 on both LiteLLM and direct-provider paths; in-app agent execution and artifact/test proof remain pending. |
 | 5 | No fallback and Use balance OFF | Proven | Static/runtime one-route proof passes; owner confirmed Use balance OFF on 2026-08-09 and the private ledger records no billing identifier |
 | 6 | Loopback-only host binds | Proven | Docker publishes and `ss` show only 127.0.0.1 on all active diagnostic/application ports |
-| 7 | Tailnet-only Tailscale path | Partial | Approved Serve has one private HTTPS root route, zero Funnel ports, and Windows-client HTTP/WSS proof; authenticated chat reload and reconnect after app restart remain missing |
+| 7 | Tailnet-only Tailscale path | Partial | Approved Serve has one private HTTPS root route, zero Funnel ports, and Windows-client HTTP/WSS proof before and after app recreate; authenticated chat reload and state-continuity proof remain missing |
 | 8 | `.wrangler` restart persistence | Proven | Known sentinel SHA survives crash recovery, graceful stop, recreate, and restart |
 | 9 | New-volume restore of real data | Partial | Safe new-volume restore now proves the real owner DO/model/session-key shape plus closed-signup and browser runtime. No chat or Gadget exists yet, so their required restore proof remains pending; the verification volume is retained and its containers are stopped. |
 | 10 | ASB read-only Gatekeeper search | Pending | HTTPS endpoint requires auth as expected; Gatekeeper OAuth/grant and `memory_search` tool evidence are missing |
