@@ -133,10 +133,10 @@ Completed against official base
 | `pnpm build` | Pass |
 | `pnpm test` | Pass; all executed workspace tests pass and expected integration skips remain |
 | Compose | Base, mock, and restore overlays all pass `config --quiet` |
-| Final image | `sha256:4bba919844801da219664e086c4b072c0a59508c80ff4826190fbb9c22616752`, 404,136,718 bytes |
+| Final image | Current rebuilt manifest `sha256:fe0b6c57b6ab9bbb6b9c00aa5d1cd562a756453a051d6cd0c6c72b6246e5db0b`, 404,136,718 bytes; Docker reused the previously verified application COPY/build layers |
 | Toolchain in image | Node 22.14.0, pnpm 11.17.0, Wrangler 4.119.0 |
 | Symlinks | Exact 23 paths/targets pass on host, at build time, and in final image |
-| Secret scan | Pass over 852 tracked/untracked non-ignored candidate files |
+| Secret scan | Pass over 855 tracked/untracked non-ignored candidate files |
 | LiteLLM mock bridge | All four model catalog, text, function call, and function output assertions pass |
 | Main runtime | HTTP 200; Cloudflare OS and LiteLLM healthy; host ports 8877/4001 loopback-only |
 | Gatekeeper URL | Runtime logs show MCP and other Gatekeepers derived from `http://127.0.0.1:8877` |
@@ -159,6 +159,8 @@ Completed against official base
 | DeepSeek real admission | One LiteLLM Responses request and one direct OpenCode Chat Completions request each returned HTTP 403. No retry/fallback was made; redacted classification did not identify balance, key, or model-not-found errors. Provider/model entitlement must be verified before another real call. |
 | Independent OpenCode check | Windows OpenCode 1.1.53 has no OpenCode Go credential in `opencode auth list`, and its current catalog does not list `opencode-go/deepseek-v4-flash`; the owner must complete `/connect` locally before a TUI probe can distinguish account entitlement from a provider-side 403. |
 | User model state | A read-only local Durable Object key audit still finds only `aiModels:glm-5.2`; the Cloudflare OS UI must replace it with `deepseek-v4-flash` after provider admission is resolved. No credential value was read or printed. |
+| Owner-state backup | Clean committed `home` SHA `3e63fef…`, exact live volume, owner-only permissions, and both checksums pass for `/home/gpdmini/cloudflare-os-private-backups/20260808T213024Z` |
+| Owner-state restore | New retained volume `cloudflare-os-home-restore-20260808t213024z-owner` starts healthy on loopback port 18877; closed signup and desktop/mobile browser checks pass; live and restored state each contain one User DO, the same single model key, and two session records without reading values |
 
 The first bridge attempt was made while LiteLLM health was still `starting` and
 reset its connection; the same test passed once healthy. The first restore attempt
@@ -200,7 +202,7 @@ The Goal remains incomplete until these are evidenced.
 | 6 | Loopback-only host binds | Proven | Docker publishes and `ss` show only 127.0.0.1 on all active diagnostic/application ports |
 | 7 | Tailnet-only Tailscale path | Partial | Approved Serve has one private HTTPS root route, zero Funnel ports, and Windows-client HTTP/WSS proof; authenticated chat reload and reconnect after app restart remain missing |
 | 8 | `.wrangler` restart persistence | Proven | Known sentinel SHA survives crash recovery, graceful stop, recreate, and restart |
-| 9 | New-volume restore of real data | Partial | Multiple safe new-volume restores and matching sentinel pass; owner account/chat/Gadget do not exist yet |
+| 9 | New-volume restore of real data | Partial | Safe new-volume restore now proves the real owner DO/model/session-key shape plus closed-signup and browser runtime. No chat or Gadget exists yet, so their required restore proof remains pending; the verification volume is retained and its containers are stopped. |
 | 10 | ASB read-only Gatekeeper search | Pending | HTTPS endpoint requires auth as expected; Gatekeeper OAuth/grant and `memory_search` tool evidence are missing |
 | 11 | lint/build/test/Compose/Docker/secret suite | Proven | Current ledger results plus final static rerun |
 | 12 | Early Access development-pilot wording | Proven | README, architecture, operations, and security documents explicitly reject production wording |
