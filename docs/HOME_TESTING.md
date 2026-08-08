@@ -60,12 +60,19 @@ The current evidence used reference SHA
 the WSL test should normally use Playwright's Linux browser. Windows Chrome cannot
 provide Playwright's Linux pipe file descriptors across the WSL boundary.
 
+For the independent Tailscale client, invoke
+`ops/home/qa/tailscale-windows-smoke.ps1` from WSL as documented in
+`ops/home/README.md`. It withholds the origin and checks HTTPS plus two WSS
+connections. `tailscale-smoke.mjs` is the browser-level check for a Linux client;
+transport exceptions are deliberately sanitized before they reach output.
+
 ## No-cost model compatibility
 
-Start the mock override as documented in `ops/home/README.md`, then run
-`verify-litellm-bridge.mjs`. It must prove:
+Start the mock override as a separate Compose project on host port 14002, as
+documented in `ops/home/README.md`, then run `verify-litellm-bridge.mjs`. It must
+prove:
 
-- authenticated `/v1/models` lists only `glm-5.2`;
+- authenticated `/v1/models` lists only `deepseek-v4-flash`;
 - a Responses API text request reaches Chat Completions and returns text;
 - a Responses API function definition becomes a Chat Completions tool call;
 - a `function_call_output` completes the round trip.
@@ -80,7 +87,7 @@ a Cloudflare OS agent tool.
 | Service health | Compose health plus HTTP response | No |
 | Host exposure | `ss`/Docker publishes show only loopback | No |
 | Owner login | successful local login, redacted | No |
-| Model registration | `glm-5.2`, service URL, no fallback | No |
+| Model registration | `deepseek-v4-flash`, service URL, no fallback | No |
 | Normal chat | one short real response | Yes, after cost gate |
 | Reload persistence | same chat after browser reload | No additional call |
 | Restart persistence | account/chat/Gadget after container restart | No additional call |
@@ -140,13 +147,18 @@ Completed against official base
 | Restore hardening | Launcher rejects the live volume and the pre-marker second volume; completed r3 and latest r4 volumes are retained without touching live state |
 | Restore runtime | Latest r4 uses the final image and exact named volume; HTTP 200, completion marker, matching sentinel SHA-256, desktop/mobile browser smoke, then clean stop in 2 seconds |
 | Browser layout | Playwright/Linux Chromium passes at 1440x900 and 390x844 with no horizontal overflow; owner-only screenshots are Git-ignored |
-| Signup control audit | Source enforcement exists, but the 2026-08-09 unauthenticated `/signup` probe still reports registration open; runtime closure is not accepted |
+| Signup control audit | One owner state exists and the 2026-08-09 unauthenticated `/signup` browser probe reports registration closed, including after the real-stack recreate |
 | Final-image soak | 600 seconds pass on image `sha256:4bba…6752`; both service health states, restart counts, and container IDs remained unchanged |
 | Graceful stop | Initial restore stop reached the 30-second limit/exit 137; process-group forwarding then stopped in 1 second without a forced kill, followed by healthy restart, matching sentinel, and a 60-second strict soak |
 | Backup stop guard | Backup refuses exit 137/OOM before reading state; the clean-stop path created and checksummed the latest archive, restarted main healthy, and restored it into new r4 |
-| Tailscale preflight | Read-only Serve status is empty; no configuration was changed |
+| Tailscale private route | After explicit approval, one HTTPS 443 root route proxies to `127.0.0.1:8877`; Funnel count is zero; Windows tailnet client returns HTTP 200 and completes two independent WSS connections |
 | GitHub fork/push | After explicit owner approval, `oudouusa/cloudflare-os` is verified as a fork of `cloudflare/cloudflare-os`; `main` and `home` were pushed without force or PR creation |
-| Real-env preflight | File mode is 600 and OpenCode key/base pass without disclosure; LiteLLM master key strength and Tailscale public-origin match currently fail, so real Compose/Serve remain blocked |
+| Real-env preflight | File mode 600, non-placeholder OpenCode/LiteLLM keys, exact OpenCode endpoint, and derived Tailscale origin all pass without disclosure |
+| Initial real OpenCode bridge | The first owner-approved GLM-5.2 pilot returned HTTP 200/text and one validated required function call. The owner then selected DeepSeek V4 Flash; this historical GLM result does not prove the replacement route. |
+| DeepSeek mock bridge | The one-route catalog, normal Responses conversion, required function call, and function-output round trip all pass without contacting OpenCode. |
+| DeepSeek real admission | One LiteLLM Responses request and one direct OpenCode Chat Completions request each returned HTTP 403. No retry/fallback was made; redacted classification did not identify balance, key, or model-not-found errors. Provider/model entitlement must be verified before another real call. |
+| Independent OpenCode check | Windows OpenCode 1.1.53 has no OpenCode Go credential in `opencode auth list`, and its current catalog does not list `opencode-go/deepseek-v4-flash`; the owner must complete `/connect` locally before a TUI probe can distinguish account entitlement from a provider-side 403. |
+| User model state | A read-only local Durable Object key audit still finds only `aiModels:glm-5.2`; the Cloudflare OS UI must replace it with `deepseek-v4-flash` after provider admission is resolved. No credential value was read or printed. |
 
 The first bridge attempt was made while LiteLLM health was still `starting` and
 reset its connection; the same test passed once healthy. The first restore attempt
@@ -161,9 +173,16 @@ script now uses explicit service branches, also rejects container replacement,
 and completed a clean 600-second final-image run. These failures and their distinct
 fixes are retained as operational regression cases.
 
-Not yet accepted: closed signup runtime, real owner/chat/Gadget data, real OpenCode
-Go normal and agentic calls, Tailscale Serve/HTTP/WebSocket/reload, and ASB
-`memory_search` through Gatekeeper.
+The 2026-08-09 DeepSeek mock repeat initially sent its catalog check to the
+script's default live diagnostic port because the optional QA base URL was supplied
+under an unsupported environment name. It returned HTTP 400 before any inference.
+The script now accepts `QA_LITELLM_BASE_URL`; the isolated-port rerun passed all
+four checks and the temporary project was removed without touching live volumes.
+
+Not yet accepted: DeepSeek provider admission, Cloudflare OS user-model replacement,
+real in-app chat/Gadget tool execution, authenticated remote browser reload/reconnect
+after restart, a real-data backup/restore, and ASB `memory_search` through
+Gatekeeper.
 The Goal remains incomplete until these are evidenced.
 
 ## Goal acceptance audit
@@ -176,10 +195,10 @@ The Goal remains incomplete until these are evidenced.
 | 1 | Official source and 23 symlinks | Proven | Git ancestry plus exact host/build/image path-target checks |
 | 2 | `main`/`home` separation and sync procedure | Proven | `main` remains at/tracks `upstream/main`; committed `home` tracks `origin/home`; documented sync avoids history rewriting |
 | 3 | Complete home-reference classification | Proven | `home-reference-audit.md` covers every required file group and evidence family |
-| 4 | Real GLM-5.2 normal and agent tool flow | Pending | Mock conversion/tool round-trip passes; real provider and Cloudflare OS agent execution are intentionally uncalled |
+| 4 | Real owner-selected OpenCode Go normal and agent tool flow | Partial | Historical GLM proof and all four current DeepSeek mock bridge checks pass. Current real DeepSeek requests stop at HTTP 403 on both LiteLLM and direct-provider paths; in-app agent execution and artifact/test proof remain pending. |
 | 5 | No fallback and Use balance OFF | Proven | Static/runtime one-route proof passes; owner confirmed Use balance OFF on 2026-08-09 and the private ledger records no billing identifier |
 | 6 | Loopback-only host binds | Proven | Docker publishes and `ss` show only 127.0.0.1 on all active diagnostic/application ports |
-| 7 | Tailnet-only Tailscale path | Pending | Existing Serve state was read as empty; mutation and remote HTTP/WebSocket/reload tests need approval |
+| 7 | Tailnet-only Tailscale path | Partial | Approved Serve has one private HTTPS root route, zero Funnel ports, and Windows-client HTTP/WSS proof; authenticated chat reload and reconnect after app restart remain missing |
 | 8 | `.wrangler` restart persistence | Proven | Known sentinel SHA survives crash recovery, graceful stop, recreate, and restart |
 | 9 | New-volume restore of real data | Partial | Multiple safe new-volume restores and matching sentinel pass; owner account/chat/Gadget do not exist yet |
 | 10 | ASB read-only Gatekeeper search | Pending | HTTPS endpoint requires auth as expected; Gatekeeper OAuth/grant and `memory_search` tool evidence are missing |

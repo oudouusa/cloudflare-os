@@ -13,7 +13,7 @@ function chatCompletion(message, finishReason = "stop") {
     id: "chatcmpl_mock",
     object: "chat.completion",
     created: 1_786_118_400,
-    model: "glm-5.2",
+    model: "deepseek-v4-flash",
     choices: [{ index: 0, message, finish_reason: finishReason }],
     usage: { prompt_tokens: 8, completion_tokens: 4, total_tokens: 12 },
   };
@@ -33,7 +33,7 @@ const server = createServer((request, response) => {
   if (request.method === "GET" && request.url === "/v1/models") {
     sendJson(response, 200, {
       object: "list",
-      data: [{ id: "glm-5.2", object: "model", created: 1_786_118_400, owned_by: "opencode-go" }],
+      data: [{ id: "deepseek-v4-flash", object: "model", created: 1_786_118_400, owned_by: "opencode-go" }],
     });
     return;
   }
@@ -54,7 +54,7 @@ const server = createServer((request, response) => {
       return;
     }
 
-    if (payload.model !== "glm-5.2") {
+    if (payload.model !== "deepseek-v4-flash") {
       sendJson(response, 400, { error: { message: "unexpected model" } });
       return;
     }

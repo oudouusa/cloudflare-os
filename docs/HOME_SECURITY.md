@@ -16,19 +16,19 @@ is treated as an Internet-facing production security boundary.
 - No Cloudflare Workers, KV, D1, R2, AI Gateway, or other account resource is created.
 
 After the owner's first account is created, an administrator must disable new
-signups in Cloudflare OS Admin settings. Until that behavior is verified, do not
-invite additional users or treat the application login as the outer boundary.
-Sharing links and administrator behavior require explicit QA before use.
+signups in Cloudflare OS Admin settings. The current home volume has one owner
+account and the unauthenticated `/signup` browser probe reports registration
+closed. Sharing links and additional-user behavior remain outside MVP and require
+explicit QA before use.
 
 The official local runner sets `ADMINS` to the exact username `admin`; that is why
 the first private owner account uses that name. This is a development-runner
 convention, not a substitute for the Tailscale reachability boundary.
 
 Current source contains an **Allow new sign-ups** Admin toggle and enforces the
-stored value in password, Gatekeeper, and Access account-creation paths. That is a
-static source finding, not runtime acceptance: after the owner disables it, an
-unauthenticated create-account attempt must be rejected and the owner must still
-be able to sign in.
+stored value in password, Gatekeeper, and Access account-creation paths. Runtime
+acceptance also requires the unauthenticated closed-signup probe to remain green
+after restart and restore.
 
 ## Secrets and private data
 
@@ -55,10 +55,10 @@ Review diffs and evidence manually as well.
 
 ## Provider and cost controls
 
-The single LiteLLM route is OpenCode Go `glm-5.2`. No ZAI, AWS, Bedrock, NVIDIA,
-Gemini, OpenAI API key, fallback, or automatic retry is configured. LiteLLM request
-body logging, spend logs, and telemetry are disabled. `COST_GUARDRAILS.md` is the
-authoritative pre-inference checklist.
+The single LiteLLM route is OpenCode Go `deepseek-v4-flash`. No ZAI, AWS, Bedrock,
+NVIDIA, Gemini, OpenAI API key, fallback, or automatic retry is configured. LiteLLM
+request body logging, spend logs, and telemetry are disabled.
+`COST_GUARDRAILS.md` is the authoritative pre-inference checklist.
 
 ## ASB least privilege
 

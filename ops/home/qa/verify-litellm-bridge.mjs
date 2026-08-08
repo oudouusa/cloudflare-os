@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
-const baseUrl = process.argv[2] ?? "http://127.0.0.1:4001/v1";
+const baseUrl = process.argv[2] ?? process.env.QA_LITELLM_BASE_URL ??
+    "http://127.0.0.1:4001/v1";
 const masterKey = process.env.QA_LITELLM_MASTER_KEY ?? "sk-litellm-mock-only";
 
 async function request(path, init = {}) {
@@ -18,12 +19,12 @@ async function request(path, init = {}) {
 }
 
 const models = await request("/models");
-assert.deepEqual(models.data.map(model => model.id), ["glm-5.2"]);
-console.log("PASS authenticated model catalog contains only glm-5.2");
+assert.deepEqual(models.data.map(model => model.id), ["deepseek-v4-flash"]);
+console.log("PASS authenticated model catalog contains only deepseek-v4-flash");
 
 const normal = await request("/responses", {
   method: "POST",
-  body: JSON.stringify({ model: "glm-5.2", input: "Reply with one short sentence." }),
+  body: JSON.stringify({ model: "deepseek-v4-flash", input: "Reply with one short sentence." }),
 });
 const normalText = normal.output
     .flatMap(item => item.content ?? [])
@@ -34,7 +35,7 @@ console.log("PASS Responses API normal request crossed the Chat Completions brid
 const toolResponse = await request("/responses", {
   method: "POST",
   body: JSON.stringify({
-    model: "glm-5.2",
+    model: "deepseek-v4-flash",
     input: "Use write_file exactly once.",
     tool_choice: "required",
     tools: [{
@@ -65,7 +66,7 @@ console.log("PASS Responses API function tool became a Chat Completions tool cal
 const toolResult = await request("/responses", {
   method: "POST",
   body: JSON.stringify({
-    model: "glm-5.2",
+    model: "deepseek-v4-flash",
     input: [
       toolCall,
       {

@@ -22,7 +22,7 @@ The decisions below mean:
 | `Dockerfile` | Adapt | Preserve the containerized `run-local` idea, but use official CI's Node 22.14 line rather than the reference's Node 24, pin the base image digest, and build from this official checkout. | Image build, Node/pnpm versions, in-image symlink audit |
 | `.env.example` | Adapt | Keep a documented template, but expose only OpenCode Go, LiteLLM, ports, public origin, image, and volume names. All values that look like secrets are inert placeholders. | Secret scanner and manual diff against Compose interpolation |
 | `litellm/Dockerfile` | Reject | A custom LiteLLM build increases patch and supply-chain surface. Use the official LiteLLM `v1.95.0` multi-architecture image pinned by digest. | Inspect resolved image and run bridge QA |
-| `litellm/config.yaml` | Adapt | Retain the proxy boundary, but collapse 26 routes to one `glm-5.2` route, one request at a time, no retry, no fallback, no message/spend logging, and no telemetry. | `check-config.sh`, authenticated `/v1/models`, normal/tool bridge QA |
+| `litellm/config.yaml` | Adapt | Retain the proxy boundary, but collapse 26 routes to one owner-selected `deepseek-v4-flash` route, one request at a time, no retry, no fallback, no message/spend logging, and no telemetry. | `check-config.sh`, authenticated `/v1/models`, normal/tool bridge QA |
 | `litellm/patch_litellm_mantle.py` | Reject | The Mantle/AWS compatibility patch is unrelated to OpenCode Go and would create a maintained fork of LiteLLM internals. | Assert no Mantle or AWS reference in the home configuration |
 
 The Compose URL from Cloudflare OS must be `http://litellm:4000/v1`; `localhost`

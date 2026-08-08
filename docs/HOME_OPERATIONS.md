@@ -8,9 +8,8 @@ Run commands from the repository root:
 docker compose --env-file ops/home/.env -f ops/home/compose.yaml up -d
 docker compose --env-file ops/home/.env -f ops/home/compose.yaml ps
 curl --fail --silent --show-error http://127.0.0.1:8877/ >/dev/null
-curl --fail --silent --show-error \
-  -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
-  http://127.0.0.1:4001/v1/models >/dev/null
+docker exec cloudflare-os-home-litellm-1 python -c \
+  "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:4000/v1/models',headers={'Authorization':'Bearer '+os.environ['LITELLM_MASTER_KEY']}); raise SystemExit(0 if urllib.request.urlopen(r,timeout=10).status==200 else 1)"
 ```
 
 Avoid placing a real master key in shell history. Prefer loading `ops/home/.env`
@@ -78,11 +77,25 @@ tailscale status --json
 ```
 
 The intended change is one tailnet-only HTTPS route proxying to
-`http://127.0.0.1:8877`. First update `PUBLIC_BASE_URL` to the exact approved
-Tailscale HTTPS origin so Gatekeeper OAuth redirects are correct. Do not run a
-Serve mutation until the current JSON and exact command/rollback have been shown to
-the owner and approved. Funnel, public Tunnel, router forwarding, and a host
-`0.0.0.0` publish are forbidden.
+`http://127.0.0.1:8877`. First update `PUBLIC_BASE_URL` without printing the private
+origin so Gatekeeper OAuth redirects are correct:
+
+```bash
+node ops/home/scripts/set-tailscale-public-base.mjs
+node ops/home/qa/check-private-env.mjs
+```
+
+Do not run a Serve mutation until the current JSON and exact command/rollback have
+been shown to the owner and approved. Funnel, public Tunnel, router forwarding, and
+a host `0.0.0.0` publish are forbidden. Once approved:
+
+```bash
+sudo tailscale serve --bg http://127.0.0.1:8877
+tailscale serve status --json
+```
+
+Rollback is `sudo tailscale serve reset`. This PC uses `sudo` for the Serve
+mutation; `tailscale set --operator` was deliberately not applied.
 
 After approval, verify separately:
 
@@ -91,6 +104,12 @@ After approval, verify separately:
 3. Reconnection after a container restart.
 4. Browser reload persistence.
 5. Mobile-width basic navigation.
+
+The WSL Tailscale node may refuse a connection to its own Serve address even while
+another tailnet node can reach it. This PC therefore treats the Windows host as the
+independent client and runs `ops/home/qa/tailscale-windows-smoke.ps1`; the script
+checks HTTPS plus two independent WSS upgrades without logging the private origin.
+The Linux Playwright smoke keeps URL-bearing transport errors redacted.
 
 ## Short and long soak
 

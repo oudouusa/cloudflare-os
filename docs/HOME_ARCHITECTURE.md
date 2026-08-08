@@ -19,7 +19,7 @@ tailnet browser ── Tailscale Serve ───┘              │
                                                 LiteLLM :4000
                                                           │ HTTPS
                                                           v
-                                              OpenCode Go / GLM-5.2
+                                         OpenCode Go / DeepSeek V4 Flash
 
 host diagnostics ── 127.0.0.1:4001 ──> LiteLLM
 ```
@@ -69,7 +69,8 @@ separate stack/port. It never writes into the live volume.
 ## Model compatibility boundary
 
 Cloudflare OS's current `Other OpenAI` provider uses the OpenAI Responses API.
-OpenCode Go exposes Chat Completions for model ID `glm-5.2`. LiteLLM v1.95.0 is
+OpenCode Go exposes Chat Completions for model ID `deepseek-v4-flash`. LiteLLM
+v1.95.0 is
 pinned and configured with `use_chat_completions_api: true`, making this conversion
 explicit. The local mock QA proves normal and function-tool round trips before any
 real inference is permitted.
