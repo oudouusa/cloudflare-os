@@ -137,11 +137,13 @@ Completed against official base
 | Restore hardening | Launcher rejects the live volume and the pre-marker second volume; completed r3 and latest r4 volumes are retained without touching live state |
 | Restore runtime | Latest r4 uses the final image and exact named volume; HTTP 200, completion marker, matching sentinel SHA-256, desktop/mobile browser smoke, then clean stop in 2 seconds |
 | Browser layout | Playwright/Linux Chromium passes at 1440x900 and 390x844 with no horizontal overflow; owner-only screenshots are Git-ignored |
-| Signup control audit | Source exposes an Admin sign-up toggle and checks it in password, Gatekeeper, and Access creation paths; runtime closure remains pending |
+| Signup control audit | Source enforcement exists, but the 2026-08-09 unauthenticated `/signup` probe still reports registration open; runtime closure is not accepted |
 | Final-image soak | 600 seconds pass on image `sha256:4bba…6752`; both service health states, restart counts, and container IDs remained unchanged |
 | Graceful stop | Initial restore stop reached the 30-second limit/exit 137; process-group forwarding then stopped in 1 second without a forced kill, followed by healthy restart, matching sentinel, and a 60-second strict soak |
 | Backup stop guard | Backup refuses exit 137/OOM before reading state; the clean-stop path created and checksummed the latest archive, restarted main healthy, and restored it into new r4 |
 | Tailscale preflight | Read-only Serve status is empty; no configuration was changed |
+| GitHub fork/push | After explicit owner approval, `oudouusa/cloudflare-os` is verified as a fork of `cloudflare/cloudflare-os`; `main` and `home` were pushed without force or PR creation |
+| Real-env preflight | File mode is 600 and OpenCode key/base pass without disclosure; LiteLLM master key strength and Tailscale public-origin match currently fail, so real Compose/Serve remain blocked |
 
 The first bridge attempt was made while LiteLLM health was still `starting` and
 reset its connection; the same test passed once healthy. The first restore attempt
@@ -156,9 +158,9 @@ script now uses explicit service branches, also rejects container replacement,
 and completed a clean 600-second final-image run. These failures and their distinct
 fixes are retained as operational regression cases.
 
-Not yet accepted: real owner/chat/Gadget data, real OpenCode Go normal and agentic
-calls, Use balance OFF evidence, Tailscale Serve/HTTP/WebSocket/reload, ASB
-`memory_search` through Gatekeeper, and the first approved GitHub push.
+Not yet accepted: closed signup runtime, real owner/chat/Gadget data, real OpenCode
+Go normal and agentic calls, Tailscale Serve/HTTP/WebSocket/reload, and ASB
+`memory_search` through Gatekeeper.
 The Goal remains incomplete until these are evidenced.
 
 ## Goal acceptance audit
@@ -169,10 +171,10 @@ The Goal remains incomplete until these are evidenced.
 | # | Condition | Status | Authoritative evidence or missing proof |
 | --- | --- | --- | --- |
 | 1 | Official source and 23 symlinks | Proven | Git ancestry plus exact host/build/image path-target checks |
-| 2 | `main`/`home` separation and sync procedure | Partial | Branch pointers and procedure are correct; the staged home implementation still needs an approved author identity and local commit |
+| 2 | `main`/`home` separation and sync procedure | Proven | `main` remains at/tracks `upstream/main`; committed `home` tracks `origin/home`; documented sync avoids history rewriting |
 | 3 | Complete home-reference classification | Proven | `home-reference-audit.md` covers every required file group and evidence family |
 | 4 | Real GLM-5.2 normal and agent tool flow | Pending | Mock conversion/tool round-trip passes; real provider and Cloudflare OS agent execution are intentionally uncalled |
-| 5 | No fallback and Use balance OFF | Partial | Static/runtime one-route proof passes; owner confirmation of the account switch is missing |
+| 5 | No fallback and Use balance OFF | Proven | Static/runtime one-route proof passes; owner confirmed Use balance OFF on 2026-08-09 and the private ledger records no billing identifier |
 | 6 | Loopback-only host binds | Proven | Docker publishes and `ss` show only 127.0.0.1 on all active diagnostic/application ports |
 | 7 | Tailnet-only Tailscale path | Pending | Existing Serve state was read as empty; mutation and remote HTTP/WebSocket/reload tests need approval |
 | 8 | `.wrangler` restart persistence | Proven | Known sentinel SHA survives crash recovery, graceful stop, recreate, and restart |
@@ -180,4 +182,4 @@ The Goal remains incomplete until these are evidenced.
 | 10 | ASB read-only Gatekeeper search | Pending | HTTPS endpoint requires auth as expected; Gatekeeper OAuth/grant and `memory_search` tool evidence are missing |
 | 11 | lint/build/test/Compose/Docker/secret suite | Proven | Current ledger results plus final static rerun |
 | 12 | Early Access development-pilot wording | Proven | README, architecture, operations, and security documents explicitly reject production wording |
-| 13 | Approved first fork/push | Pending | GitHub auth exists but no fork/remote/write was performed; explicit approval is missing |
+| 13 | Approved first fork/push | Proven | Owner explicitly approved; verified fork has exact `main`/`home` heads and no PR, release, force-push, or upstream write was made |
