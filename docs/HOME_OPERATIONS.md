@@ -111,6 +111,42 @@ independent client and runs `ops/home/qa/tailscale-windows-smoke.ps1`; the scrip
 checks HTTPS plus two independent WSS upgrades without logging the private origin.
 The Linux Playwright smoke keeps URL-bearing transport errors redacted.
 
+## ASB read-only MCP connection
+
+Before creating any account or OAuth grant, run the non-mutating discovery check.
+Use the existing ASB MCP URL from the owner's client configuration without adding
+it to Git or shell history:
+
+```bash
+read -rsp "ASB MCP URL: " CFOS_ASB_MCP_URL; printf '\n'
+export CFOS_ASB_MCP_URL
+node ops/home/qa/asb-oauth-preflight.mjs
+unset CFOS_ASB_MCP_URL
+```
+
+The preflight sends only unauthenticated GET requests. It verifies the expected
+401 challenge, same-origin protected-resource and authorization metadata, dynamic
+client registration metadata, and PKCE S256. It does not register a client, open
+the authorization page, create a grant, or call a memory tool.
+
+Complete the owner-only UI flow over the approved Tailscale HTTPS origin:
+
+1. In Cloudflare OS Connections, choose **Any MCP server** and enter the ASB
+   `/mcp` endpoint.
+2. At the ASB consent screen choose **read-only / 閲覧のみ**. Do not select
+   read+write or read+capture.
+3. For **Tools**, select **Choose tools**, check only `memory_search`, and leave
+   `memory_context`, `memory_history`, and every future tool unchecked.
+4. Attach that scoped resource only to the deliberate acceptance conversation;
+   do not make it ambient and do not bind it to an unrelated Gadget.
+5. Run one redacted search. Evidence may record only the tool name, success,
+   timestamp, and result count—never the query or returned text.
+
+The ASB read grant is server-enforced: write and capture tools are not registered
+for it. Cloudflare OS additionally enforces the named-tool fragment, so choosing
+only `memory_search` prevents later read tools from silently widening this binding.
+Disconnect the resource from the conversation after acceptance.
+
 ## Short and long soak
 
 `ops/home/scripts/soak.sh` checks health and restart counts without generating

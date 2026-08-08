@@ -69,6 +69,12 @@ OAuth scopes, and do not expose the Vault filesystem. Remove the ASB connection
 from the conversation after the test. Capture only the tool name, success state,
 timestamp, and redacted result count as evidence.
 
+Choose **named tools**, not **all tools**, even though the initial OAuth read grant
+currently exposes only three reads. The named-tool fragment is enforced on every
+call and prevents a future read-tool addition from widening the Cloudflare OS
+binding. ASB's read grant independently omits every write and capture tool at the
+server, so this is defense in depth rather than reliance on annotations alone.
+
 ## Incident response
 
 If a key may have appeared in Git, logs, or evidence, stop inference and remote

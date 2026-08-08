@@ -161,6 +161,7 @@ Completed against official base
 | User model state | A read-only local Durable Object key audit still finds only `aiModels:glm-5.2`; the Cloudflare OS UI must replace it with `deepseek-v4-flash` after provider admission is resolved. No credential value was read or printed. |
 | Owner-state backup | Clean committed `home` SHA `3e63fef…`, exact live volume, owner-only permissions, and both checksums pass for `/home/gpdmini/cloudflare-os-private-backups/20260808T213024Z` |
 | Owner-state restore | New retained volume `cloudflare-os-home-restore-20260808t213024z-owner` starts healthy on loopback port 18877; closed signup and desktop/mobile browser checks pass; live and restored state each contain one User DO, the same single model key, and two session records without reading values |
+| ASB OAuth preflight | Production `/mcp` returns the protected-resource challenge; same-origin OAuth discovery, dynamic registration metadata, and PKCE S256 pass; the Cloudflare OS container reaches the same 401 boundary without a credential |
 
 The first bridge attempt was made while LiteLLM health was still `starting` and
 reset its connection; the same test passed once healthy. The first restore attempt
@@ -203,7 +204,7 @@ The Goal remains incomplete until these are evidenced.
 | 7 | Tailnet-only Tailscale path | Partial | Approved Serve has one private HTTPS root route, zero Funnel ports, and Windows-client HTTP/WSS proof before and after app recreate; authenticated chat reload and state-continuity proof remain missing |
 | 8 | `.wrangler` restart persistence | Proven | Known sentinel SHA survives crash recovery, graceful stop, recreate, and restart |
 | 9 | New-volume restore of real data | Partial | Safe new-volume restore now proves the real owner DO/model/session-key shape plus closed-signup and browser runtime. No chat or Gadget exists yet, so their required restore proof remains pending; the verification volume is retained and its containers are stopped. |
-| 10 | ASB read-only Gatekeeper search | Pending | HTTPS endpoint requires auth as expected; Gatekeeper OAuth/grant and `memory_search` tool evidence are missing |
+| 10 | ASB read-only Gatekeeper search | Partial | Production discovery and container reachability pass. Source inspection proves a read grant registers only three read tools and marks `memory_search` read-only. Owner OAuth consent, a named-tool-only Cloudflare OS grant, and actual Gatekeeper `memory_search` evidence remain missing. |
 | 11 | lint/build/test/Compose/Docker/secret suite | Proven | Current ledger results plus final static rerun |
 | 12 | Early Access development-pilot wording | Proven | README, architecture, operations, and security documents explicitly reject production wording |
 | 13 | Approved first fork/push | Proven | Owner explicitly approved; verified fork has exact `main`/`home` heads and no PR, release, force-push, or upstream write was made |
