@@ -26,6 +26,14 @@ values with the OpenCode Go API key and a newly generated LiteLLM master key. Do
 not reuse another application's proxy key. Before any real model call, confirm in
 the OpenCode account UI that **Use balance is OFF**.
 
+Set `PUBLIC_BASE_URL` to this PC's exact Tailscale HTTPS origin, then run the
+secret-safe preflight. It reports only the failed field, never a credential or the
+tailnet hostname:
+
+```bash
+node ops/home/qa/check-private-env.mjs
+```
+
 Build and validate:
 
 ```bash

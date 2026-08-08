@@ -28,6 +28,7 @@ pnpm test
 ops/home/qa/check-symlinks.sh
 ops/home/qa/check-config.sh
 node ops/home/qa/check-secrets.mjs
+node ops/home/qa/check-private-env.mjs
 bash -n ops/home/qa/*.sh ops/home/scripts/*.sh
 node --check ops/home/qa/*.mjs
 docker compose --env-file ops/home/.env -f ops/home/compose.yaml config --quiet
@@ -49,6 +50,8 @@ directory name:
 (cd /absolute/path/to/cloudflare-os-home/qa && npm ci && npx playwright install chromium)
 CFOS_PLAYWRIGHT_ROOT=/absolute/path/to/cloudflare-os-home/qa \
   node ops/home/qa/browser-smoke.mjs
+CFOS_PLAYWRIGHT_ROOT=/absolute/path/to/cloudflare-os-home/qa \
+  node ops/home/qa/check-signup-closed.mjs
 ```
 
 The current evidence used reference SHA
@@ -126,7 +129,7 @@ Completed against official base
 | Final image | `sha256:4bba919844801da219664e086c4b072c0a59508c80ff4826190fbb9c22616752`, 404,136,718 bytes |
 | Toolchain in image | Node 22.14.0, pnpm 11.17.0, Wrangler 4.119.0 |
 | Symlinks | Exact 23 paths/targets pass on host, at build time, and in final image |
-| Secret scan | Pass over 850 tracked/untracked non-ignored candidate files |
+| Secret scan | Pass over 852 tracked/untracked non-ignored candidate files |
 | LiteLLM mock bridge | All four model catalog, text, function call, and function output assertions pass |
 | Main runtime | HTTP 200; Cloudflare OS and LiteLLM healthy; host ports 8877/4001 loopback-only |
 | Gatekeeper URL | Runtime logs show MCP and other Gatekeepers derived from `http://127.0.0.1:8877` |
