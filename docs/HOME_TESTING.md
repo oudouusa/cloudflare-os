@@ -148,7 +148,7 @@ Completed against official base
 | Restore runtime | Latest r4 uses the final image and exact named volume; HTTP 200, completion marker, matching sentinel SHA-256, desktop/mobile browser smoke, then clean stop in 2 seconds |
 | Browser layout | Playwright/Linux Chromium passes at 1440x900 and 390x844 with no horizontal overflow; owner-only screenshots are Git-ignored |
 | Signup control audit | One owner state exists and the 2026-08-09 unauthenticated `/signup` browser probe reports registration closed, including after the real-stack recreate |
-| Final-image soak | 600 seconds pass on image `sha256:4bba…6752`; both service health states, restart counts, and container IDs remained unchanged |
+| Current-image soak | 600 seconds pass on image `sha256:fe0b…e5db0b`; both service health states, restart counts, and container IDs remained unchanged, with no inference request |
 | Graceful stop | Initial restore stop reached the 30-second limit/exit 137; process-group forwarding then stopped in 1 second without a forced kill, followed by healthy restart, matching sentinel, and a 60-second strict soak |
 | Backup stop guard | Backup refuses exit 137/OOM before reading state; the clean-stop path created and checksummed the latest archive, restarted main healthy, and restored it into new r4 |
 | Tailscale private route | After explicit approval, one HTTPS 443 root route proxies to `127.0.0.1:8877`; Funnel count is zero; the Windows tailnet client returns HTTP 200 and completes two independent WSS connections, including after the owner-state backup/recreate |
