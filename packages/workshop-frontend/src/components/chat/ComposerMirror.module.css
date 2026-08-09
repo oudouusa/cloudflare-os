@@ -29,9 +29,18 @@
 .disabled { color: var(--text-color-kumo-inactive); }
 
 .textarea {
+  font-size: 14px;
   color: transparent;
   -webkit-text-fill-color: transparent;
   caret-color: var(--text-color-kumo-default);
+}
+/* iOS zooms the page when a text control below 16px receives focus. Keep the desktop density, but
+ * use the non-zooming size on touch-first devices in both orientations. The mirror copies this
+ * computed font size from the textarea, so its token glyphs stay aligned. */
+@media (hover: none) and (pointer: coarse) {
+  .textarea {
+    font-size: 16px;
+  }
 }
 .textarea::placeholder {
   -webkit-text-fill-color: var(--text-color-kumo-inactive);
