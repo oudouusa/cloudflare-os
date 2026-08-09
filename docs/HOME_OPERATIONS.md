@@ -160,6 +160,14 @@ for it. Cloudflare OS additionally enforces the named-tool fragment, so choosing
 only `memory_search` prevents later read tools from silently widening this binding.
 Disconnect the resource from the conversation after acceptance.
 
+The resource used for the 2026-08-09 acceptance was created as **All tools** and
+therefore contains all three tools exposed by ASB's read-only OAuth grant. It has
+no write/capture surface, but it is broader than the preferred named grant. To
+harden it without changing OAuth scopes, repeat steps 2, 5, and 6 with the same
+connected account, create a new named `memory_search` resource, verify its capsule
+summary says `1 named MCP tool`, and then remove the old all-tools capsule. Do not
+disconnect the underlying account until the replacement works.
+
 ## Optional GreenVPS CLIProxyAPI activation gate
 
 The 2026-08-09 read-only audit proves that the Cloudflare OS container can reach

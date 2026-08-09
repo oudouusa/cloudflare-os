@@ -77,6 +77,12 @@ call and prevents a future read-tool addition from widening the Cloudflare OS
 binding. ASB's read grant independently omits every write and capture tool at the
 server, so this is defense in depth rather than reliance on annotations alone.
 
+The 2026-08-09 runtime acceptance used an existing all-three-read-tools binding.
+It exposed zero write/capture tools, was attached to only the acceptance
+conversation, and executed only `memory_search`, so the read-only acceptance
+boundary passed. Replace it with a named `memory_search` binding when convenient;
+until then, record the broader read surface as an explicit defense-in-depth gap.
+
 ## Incident response
 
 If a key may have appeared in Git, logs, or evidence, stop inference and remote
