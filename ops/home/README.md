@@ -72,6 +72,39 @@ Cloudflare OS form. Keep this as the only MVP model and do not configure a fallb
 Leave **Quick model** unset during acceptance so title generation cannot create
 extra provider calls.
 
+### Replace the earlier GLM 5.2 registration
+
+The current Cloudflare OS UI exposes add and delete operations, but no in-place
+model editor. Because the model ID changes, migrate through the application API
+rather than rewriting Durable Object storage:
+
+1. Add `deepseek-v4-flash` with the fields above while retaining `glm-5.2`.
+2. Start a new chat and select `deepseek-v4-flash`. Do not click the provider row;
+   that toggles **Quick model**, which remains unset during acceptance.
+3. After provider admission is resolved and the bounded DeepSeek acceptance call
+   succeeds, delete `glm-5.2` from its provider-row menu.
+
+Chats created with `glm-5.2` retain that historical model ID. They may remain
+viewable, but continuing them after the old registration is deleted can fail model
+resolution; use a new DeepSeek chat and retain the owner-state backup. Do not edit
+the live `.wrangler` volume or copy model credentials out of it.
+
+Current owner state (2026-08-09): the owner-authorized migration completed through
+the application's `UserDurableObject` API. The only registered model and preferred
+model are `deepseek-v4-flash`; **Quick model** is unset. No inference was made by
+the migration. The clean pre-migration rollback backup is
+`/home/gpdmini/cloudflare-os-private-backups/20260808T220606Z`, and the checksummed
+post-migration backup is `20260808T222719Z` under the same owner-only root. DeepSeek
+provider admission now passes after the owner explicitly enabled the required
+China-hosted deployment consent in the OpenCode web console. A first no-retry
+16-token LiteLLM request ended during the model's reasoning preamble. One separately
+approved no-retry 128-token request then returned HTTP 200/`completed`, with
+reasoning in its own item and exactly `OK` in the final message item. The direct
+LiteLLM semantic short-response bridge therefore passes; a complete in-app response
+and agent tool call remain open. The consent affects inference data residency even
+though OpenCode currently lists zero-day retention for this model. **Use balance**
+remains OFF.
+
 ## Private remote access
 
 After reviewing the existing Serve state and receiving approval, configure the
@@ -98,6 +131,13 @@ unset cfos_tail_url cfos_ps_script
 Run one short normal chat and one minimal agent tool flow only after the cost gate
 in `docs/COST_GUARDRAILS.md` is satisfied.
 
+DeepSeek V4 thinking mode must not receive `tool_choice`. Cloudflare OS's normal
+pi-ai path leaves it unset. The local LiteLLM callback exists for the separate
+tool-result constraint: it replays the preceding `reasoning_content` and changes
+only a null assistant content field to an empty string immediately before the
+provider call. Do not use the callback to silently remove an explicitly requested
+tool choice.
+
 ## No-cost bridge QA
 
 This starts only LiteLLM and the local mock provider in a separate Compose project;
@@ -113,8 +153,17 @@ docker compose -p cloudflare-os-deepseek-mock \
 
 QA_LITELLM_BASE_URL=http://127.0.0.1:14002/v1 \
 QA_LITELLM_MASTER_KEY=sk-litellm-mock-only \
+QA_MOCK_BASE_URL=http://127.0.0.1:14100 \
 node ops/home/qa/verify-litellm-bridge.mjs
 ```
+
+Expected output has six PASS lines. The last two assertions prove exactly three
+requests for the successful flow, then one deliberate `tool_choice` rejection with
+no retry. The mock also rejects null assistant tool-call content and any missing or
+changed reasoning replay. With `CFOS_DEEPSEEK_COMPAT_TRACE=1` set only by the mock
+override, its structure-only trace shows the four total completion dispatches and
+never prints prompt or reasoning text. The temporary mock diagnostic port is
+published only on `127.0.0.1:14100`.
 
 Remove only this temporary project after the test. It never mounts the live
 `.wrangler` volume, and `-v` remains forbidden:

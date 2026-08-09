@@ -68,14 +68,20 @@ transport exceptions are deliberately sanitized before they reach output.
 
 ## No-cost model compatibility
 
-Start the mock override as a separate Compose project on host port 14002, as
-documented in `ops/home/README.md`, then run `verify-litellm-bridge.mjs`. It must
-prove:
+Start the mock override as a separate Compose project on host ports 14002 and
+14100, as documented in `ops/home/README.md`, then run
+`verify-litellm-bridge.mjs`. Both ports are loopback-only. It must prove:
 
 - authenticated `/v1/models` lists only `deepseek-v4-flash`;
 - a Responses API text request reaches Chat Completions and returns text;
 - a Responses API function definition becomes a Chat Completions tool call;
-- a `function_call_output` completes the round trip.
+- the provider payload contains no unsupported `tool_choice`;
+- the tool-call assistant content is non-null;
+- the exact DeepSeek reasoning context is replayed with the assistant tool call;
+- a `function_call_output` completes the round trip;
+- exactly three provider requests complete the successful flow;
+- one deliberate unsupported `tool_choice` request produces exactly one provider
+  rejection and no retry.
 
 This is compatibility evidence, not evidence that the real model chose and executed
 a Cloudflare OS agent tool.
@@ -137,7 +143,7 @@ Completed against official base
 | Toolchain in image | Node 22.14.0, pnpm 11.17.0, Wrangler 4.119.0 |
 | Symlinks | Exact 23 paths/targets pass on host, at build time, and in final image |
 | Secret scan | Pass over 855 tracked/untracked non-ignored candidate files |
-| LiteLLM mock bridge | All four model catalog, text, function call, and function output assertions pass |
+| LiteLLM mock bridge | Catalog, text, function call, reasoning replay/function output, and exact dispatch-count assertions pass |
 | Main runtime | HTTP 200; Cloudflare OS and LiteLLM healthy; host ports 8877/4001 loopback-only |
 | Gatekeeper URL | Runtime logs show MCP and other Gatekeepers derived from `http://127.0.0.1:8877` |
 | Volume init | First EACCES exposed fresh-volume ownership; one-shot CHOWN-only init fixed it while the application stays UID 1000 |
@@ -155,10 +161,14 @@ Completed against official base
 | GitHub fork/push | After explicit owner approval, `oudouusa/cloudflare-os` is verified as a fork of `cloudflare/cloudflare-os`; `main` and `home` were pushed without force or PR creation |
 | Real-env preflight | File mode 600, non-placeholder OpenCode/LiteLLM keys, exact OpenCode endpoint, and derived Tailscale origin all pass without disclosure |
 | Initial real OpenCode bridge | The first owner-approved GLM-5.2 pilot returned HTTP 200/text and one validated required function call. The owner then selected DeepSeek V4 Flash; this historical GLM result does not prove the replacement route. |
-| DeepSeek mock bridge | The one-route catalog, normal Responses conversion, required function call, and function-output round trip all pass without contacting OpenCode. |
-| DeepSeek real admission | One LiteLLM Responses request and one direct OpenCode Chat Completions request each returned HTTP 403. No retry/fallback was made; redacted classification did not identify balance, key, or model-not-found errors. Provider/model entitlement must be verified before another real call. |
-| Independent OpenCode check | Windows OpenCode 1.1.53 has no OpenCode Go credential in `opencode auth list`, and its current catalog does not list `opencode-go/deepseek-v4-flash`; the owner must complete `/connect` locally before a TUI probe can distinguish account entitlement from a provider-side 403. |
-| User model state | A read-only local Durable Object key audit still finds only `aiModels:glm-5.2`; the Cloudflare OS UI must replace it with `deepseek-v4-flash` after provider admission is resolved. No credential value was read or printed. |
+| DeepSeek mock bridge | The one-route catalog, normal Responses conversion, unforced function call, exact reasoning replay, non-null assistant content, and function-output round trip all pass without contacting OpenCode. The successful flow made exactly three provider dispatches; a separate unsupported `tool_choice` probe made one rejected dispatch with no retry. |
+| DeepSeek real bridge | The initial LiteLLM and direct requests returned 403; the later provider message identified a required opt-in for the China-hosted latest model. After the owner enabled it, a no-retry 16-token probe returned HTTP 200 but stopped during reasoning. One separately approved no-retry 128-token probe then returned HTTP 200/`completed`: a completed `reasoning` item used 11 reasoning tokens and the separate completed `message` item was exactly `OK` (95 input, 13 output tokens total). Provider admission and the direct LiteLLM semantic short-response bridge pass; in-app chat remains untested. |
+| DeepSeek real tool preflight | One bounded diagnostic forced `tool_choice: required` and returned HTTP 400 because DeepSeek V4 thinking mode rejects that parameter. No retry/fallback followed. The strict mock now covers the corrected no-`tool_choice` payload plus required reasoning replay; a second real tool call remains unexecuted. |
+| Live compatibility deployment | LiteLLM alone was recreated with the DeepSeek adapter and read-only compatibility callback. It returned healthy, imported the callback, exposed only `deepseek-v4-flash`, and remained bound to `127.0.0.1:4001`; Cloudflare OS kept the same container ID and healthy state on `127.0.0.1:8877`. No inference was made. |
+| Post-compatibility soak | A 720-second health/restart soak kept both container IDs unchanged, both services healthy, and both restart counts unchanged. No inference was made. |
+| OpenCode Go admission check | Windows-side OpenCode CLI remains excluded. The owner used the OpenCode web workspace setting for China-hosted model consent; no local CLI credential or model catalog was used. |
+| User model state | Owner-authorized migration through the application's `UserDurableObject` API replaced the sole `glm-5.2` record with the sole `deepseek-v4-flash` record, set preferred to DeepSeek, and cleared Quick model. A post-restart backup audit independently decoded preferred as `deepseek-v4-flash` and Quick as null without reading or printing the model credential. No inference was made. |
+| Model migration backups | Clean pre-migration rollback archive `/home/gpdmini/cloudflare-os-private-backups/20260808T220606Z` and post-migration archive `20260808T222719Z` both pass their recorded checksums. |
 | Owner-state backup | Clean committed `home` SHA `3e63fef…`, exact live volume, owner-only permissions, and both checksums pass for `/home/gpdmini/cloudflare-os-private-backups/20260808T213024Z` |
 | Owner-state restore | New retained volume `cloudflare-os-home-restore-20260808t213024z-owner` starts healthy on loopback port 18877; closed signup and desktop/mobile browser checks pass; live and restored state each contain one User DO, the same single model key, and two session records without reading values |
 | ASB OAuth preflight | Production `/mcp` returns the protected-resource challenge; same-origin OAuth discovery, dynamic registration metadata, and PKCE S256 pass; the Cloudflare OS container reaches the same 401 boundary without a credential |
@@ -179,11 +189,11 @@ fixes are retained as operational regression cases.
 The 2026-08-09 DeepSeek mock repeat initially sent its catalog check to the
 script's default live diagnostic port because the optional QA base URL was supplied
 under an unsupported environment name. It returned HTTP 400 before any inference.
-The script now accepts `QA_LITELLM_BASE_URL`; the isolated-port rerun passed all
-four checks and the temporary project was removed without touching live volumes.
+The script now accepts `QA_LITELLM_BASE_URL`; the isolated-port rerun passed the
+strict suite and the temporary project was removed without touching live volumes.
 
-Not yet accepted: DeepSeek provider admission, Cloudflare OS user-model replacement,
-real in-app chat/Gadget tool execution, authenticated remote browser reload/reconnect
+Not yet accepted: a complete DeepSeek in-app normal response, real Gadget tool
+execution, authenticated remote browser reload/reconnect
 after restart, a real-data backup/restore, and ASB `memory_search` through
 Gatekeeper.
 The Goal remains incomplete until these are evidenced.
@@ -198,7 +208,7 @@ The Goal remains incomplete until these are evidenced.
 | 1 | Official source and 23 symlinks | Proven | Git ancestry plus exact host/build/image path-target checks |
 | 2 | `main`/`home` separation and sync procedure | Proven | `main` remains at/tracks `upstream/main`; committed `home` tracks `origin/home`; documented sync avoids history rewriting |
 | 3 | Complete home-reference classification | Proven | `home-reference-audit.md` covers every required file group and evidence family |
-| 4 | Real owner-selected OpenCode Go normal and agent tool flow | Partial | Historical GLM proof and all four current DeepSeek mock bridge checks pass. Current real DeepSeek requests stop at HTTP 403 on both LiteLLM and direct-provider paths; in-app agent execution and artifact/test proof remain pending. |
+| 4 | Real owner-selected OpenCode Go normal and agent tool flow | Partial | Historical GLM proof and the current strict DeepSeek mock suite pass. After owner opt-in, the real DeepSeek LiteLLM bridge returns a completed final `OK`; the separate reasoning item must not be treated as final answer text. In-app normal chat, agent execution, and artifact/test proof remain pending. |
 | 5 | No fallback and Use balance OFF | Proven | Static/runtime one-route proof passes; owner confirmed Use balance OFF on 2026-08-09 and the private ledger records no billing identifier |
 | 6 | Loopback-only host binds | Proven | Docker publishes and `ss` show only 127.0.0.1 on all active diagnostic/application ports |
 | 7 | Tailnet-only Tailscale path | Partial | Approved Serve has one private HTTPS root route, zero Funnel ports, and Windows-client HTTP/WSS proof before and after app recreate; authenticated chat reload and state-continuity proof remain missing |

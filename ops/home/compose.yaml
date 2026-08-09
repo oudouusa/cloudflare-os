@@ -45,6 +45,7 @@ services:
       DO_NOT_TRACK: "1"
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
+      - ./litellm/cfos_deepseek_compat.py:/app/cfos_deepseek_compat.py:ro
     ports:
       - 127.0.0.1:${LITELLM_HOST_PORT:-4001}:4000
     init: true

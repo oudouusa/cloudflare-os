@@ -5,7 +5,9 @@ failure catalogue. It does not copy the repository's vendored Cloudflare OS tree
 or public evidence assets. The reference was inspected at
 `b489556a7215d93fcd61af153222ca89b4e4a80d`; its notice pins the vendored
 official source to `0eaec6c5e8fc6b3298ea1aa73bf5c3e47b923c7f`. This fork started from
-official Cloudflare OS `1cb5e3d9096589e38f3fcfaf3f2191aa95a4c592`.
+official Cloudflare OS `1cb5e3d9096589e38f3fcfaf3f2191aa95a4c592`. Both remote main HEADs
+were rechecked on 2026-08-09 and remained at the recorded official and reference
+SHAs.
 
 The decisions below mean:
 
@@ -22,7 +24,7 @@ The decisions below mean:
 | `Dockerfile` | Adapt | Preserve the containerized `run-local` idea, but use official CI's Node 22.14 line rather than the reference's Node 24, pin the base image digest, and build from this official checkout. | Image build, Node/pnpm versions, in-image symlink audit |
 | `.env.example` | Adapt | Keep a documented template, but expose only OpenCode Go, LiteLLM, ports, public origin, image, and volume names. All values that look like secrets are inert placeholders. | Secret scanner and manual diff against Compose interpolation |
 | `litellm/Dockerfile` | Reject | A custom LiteLLM build increases patch and supply-chain surface. Use the official LiteLLM `v1.95.0` multi-architecture image pinned by digest. | Inspect resolved image and run bridge QA |
-| `litellm/config.yaml` | Adapt | Retain the proxy boundary, but collapse 26 routes to one owner-selected `deepseek-v4-flash` route, one request at a time, no retry, no fallback, no message/spend logging, and no telemetry. | `check-config.sh`, authenticated `/v1/models`, normal/tool bridge QA |
+| `litellm/config.yaml` | Adapt | Retain the proxy boundary, but collapse 26 routes to one owner-selected `deepseek-v4-flash` route, use LiteLLM's DeepSeek adapter, and allow one request at a time with no retry, fallback, message/spend logging, or telemetry. Mount an independently authored, async-local compatibility callback because LiteLLM 1.95.0 otherwise drops DeepSeek reasoning on a Responses tool-result turn. | `check-config.sh`, authenticated `/v1/models`, strict normal/tool/reasoning bridge QA |
 | `litellm/patch_litellm_mantle.py` | Reject | The Mantle/AWS compatibility patch is unrelated to OpenCode Go and would create a maintained fork of LiteLLM internals. | Assert no Mantle or AWS reference in the home configuration |
 
 The Compose URL from Cloudflare OS must be `http://litellm:4000/v1`; `localhost`

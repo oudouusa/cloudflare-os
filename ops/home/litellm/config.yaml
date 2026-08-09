@@ -1,7 +1,7 @@
 model_list:
   - model_name: deepseek-v4-flash
     litellm_params:
-      model: openai/deepseek-v4-flash
+      model: deepseek/deepseek-v4-flash
       api_base: os.environ/OPENCODE_GO_API_BASE
       api_key: os.environ/OPENCODE_GO_API_KEY
       use_chat_completions_api: true
@@ -17,3 +17,5 @@ litellm_settings:
   num_retries: 0
   telemetry: false
   turn_off_message_logging: true
+  callbacks:
+    - cfos_deepseek_compat.cfos_deepseek_compat

@@ -72,8 +72,27 @@ Cloudflare OS's current `Other OpenAI` provider uses the OpenAI Responses API.
 OpenCode Go exposes Chat Completions for model ID `deepseek-v4-flash`. LiteLLM
 v1.95.0 is
 pinned and configured with `use_chat_completions_api: true`, making this conversion
-explicit. The local mock QA proves normal and function-tool round trips before any
-real inference is permitted.
+explicit. The route uses LiteLLM's `deepseek/` provider adapter with the OpenCode
+Go base URL. This matters operationally: the earlier generic `openai/` adapter made
+more than one provider dispatch for a single failing mock request despite the
+zero-retry policy, while the DeepSeek adapter made one.
+
+DeepSeek V4 thinking mode has two additional protocol constraints. It rejects
+`tool_choice`, and a tool-result turn must replay the prior assistant
+`reasoning_content` with non-null assistant content. Cloudflare OS's normal pi-ai
+Responses request does not force `tool_choice`. LiteLLM 1.95.0 converts the first
+DeepSeek response to a Responses `reasoning` item, but its generic reverse
+conversion drops that item on the tool-result turn. The read-only mounted
+`cfos_deepseek_compat.py` callback keeps only a call-ID-to-reasoning map in an
+async-local variable for that request and restores it immediately before provider
+dispatch. It does not add request metadata, persist bodies, or log content.
+
+The local mock is deliberately stricter than a simple text smoke: it rejects
+`tool_choice`, null assistant content, and missing or changed reasoning context.
+It proves the normal response, function call, exact reasoning replay, and function
+output round trip before another real tool inference is permitted. The protocol
+requirements follow DeepSeek's official
+[agent integration guide](https://api-docs.deepseek.com/quick_start/agent_integrations/oh_my_pi/).
 
 The proxy version and conversion behavior were checked against the official
 [LiteLLM v1.95.0 source](https://github.com/BerriAI/litellm/tree/v1.95.0); the

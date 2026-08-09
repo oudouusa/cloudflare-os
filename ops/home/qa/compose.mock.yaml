@@ -6,6 +6,8 @@ services:
       - /qa/mock-opencode.mjs
     volumes:
       - ./qa:/qa:ro
+    ports:
+      - 127.0.0.1:${MOCK_OPENCODE_HOST_PORT:-14100}:4100
     init: true
     cap_drop:
       - ALL
@@ -25,6 +27,7 @@ services:
 
   litellm:
     environment:
+      CFOS_DEEPSEEK_COMPAT_TRACE: "1"
       OPENCODE_GO_API_BASE: http://mock-opencode:4100/v1
       OPENCODE_GO_API_KEY: mock-opencode-key
     depends_on:

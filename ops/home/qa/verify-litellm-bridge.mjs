@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 const baseUrl = process.argv[2] ?? process.env.QA_LITELLM_BASE_URL ??
     "http://127.0.0.1:4001/v1";
 const masterKey = process.env.QA_LITELLM_MASTER_KEY ?? "sk-litellm-mock-only";
+const mockBaseUrl = process.env.QA_MOCK_BASE_URL;
+const mockApiKey = process.env.QA_MOCK_API_KEY ?? "mock-opencode-key";
 
 async function request(path, init = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -37,7 +39,6 @@ const toolResponse = await request("/responses", {
   body: JSON.stringify({
     model: "deepseek-v4-flash",
     input: "Use write_file exactly once.",
-    tool_choice: "required",
     tools: [{
       type: "function",
       name: "write_file",
@@ -56,6 +57,8 @@ const toolResponse = await request("/responses", {
   }),
 });
 const toolCall = toolResponse.output.find(item => item.type === "function_call");
+const reasoningItems = toolResponse.output.filter(item => item.type === "reasoning");
+assert.equal(reasoningItems.length, 1);
 assert.equal(toolCall.name, "write_file");
 assert.deepEqual(JSON.parse(toolCall.arguments), {
   path: "bridge.txt",
@@ -68,6 +71,7 @@ const toolResult = await request("/responses", {
   body: JSON.stringify({
     model: "deepseek-v4-flash",
     input: [
+      ...reasoningItems,
       toolCall,
       {
         type: "function_call_output",
@@ -82,3 +86,42 @@ const resultText = toolResult.output
     .find(item => item.type === "output_text")?.text;
 assert.equal(resultText, "mock tool round-trip complete");
 console.log("PASS function output completed the Responses API tool round-trip");
+
+if (mockBaseUrl) {
+  let statsResponse = await fetch(`${mockBaseUrl}/qa/stats`, {
+    headers: { authorization: `Bearer ${mockApiKey}` },
+  });
+  assert.equal(statsResponse.ok, true, `mock stats failed with HTTP ${statsResponse.status}`);
+  let stats = await statsResponse.json();
+  assert.deepEqual(stats, { chatCompletionRequests: 3, compatibilityFailures: 0 });
+  console.log("PASS successful bridge flow made exactly three provider requests");
+
+  const rejected = await fetch(`${baseUrl}/responses`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${masterKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "deepseek-v4-flash",
+      input: "This request must be rejected before mock inference.",
+      tool_choice: "required",
+      tools: [{
+        type: "function",
+        name: "mock_noop",
+        description: "An inert mock tool.",
+        strict: true,
+        parameters: { type: "object", properties: {}, additionalProperties: false },
+      }],
+    }),
+  });
+  assert.equal(rejected.status, 400);
+
+  statsResponse = await fetch(`${mockBaseUrl}/qa/stats`, {
+    headers: { authorization: `Bearer ${mockApiKey}` },
+  });
+  assert.equal(statsResponse.ok, true, `mock stats failed with HTTP ${statsResponse.status}`);
+  stats = await statsResponse.json();
+  assert.deepEqual(stats, { chatCompletionRequests: 4, compatibilityFailures: 1 });
+  console.log("PASS unsupported tool_choice was rejected once without a retry");
+}

@@ -42,27 +42,51 @@ regression tests.
 
 ## Current provider admission state
 
-On 2026-08-09 the single DeepSeek route and all four mock bridge checks passed, but
-the first real request through LiteLLM returned HTTP 403. One direct OpenCode Go
-Chat Completions request with the same key also returned HTTP 403. The prior GLM-5.2
-pilot had succeeded with this account, and the redacted error classification did
-not identify insufficient balance, an invalid API key, or a missing model. This is
-therefore recorded as an unresolved model-access/provider-permission boundary, not
-as a conversion failure. No retry or fallback was attempted after the two distinct
-paths failed.
+On 2026-08-09 the initial LiteLLM and direct OpenCode requests returned HTTP 403.
+The later unredacted provider error identified the exact boundary: the latest
+DeepSeek V4 Flash deployment is hosted in China and requires explicit workspace
+opt-in. The owner enabled that setting in the OpenCode web console while keeping
+**Use balance** OFF.
 
-Before any further real request, verify that `opencode-go/deepseek-v4-flash` appears
-in the owner's OpenCode model picker and succeeds for one minimal OpenCode prompt,
-or replace the Go API key through the private `.env` workflow. Never paste the key
-into a chat, issue, command argument, or evidence file.
+After the normal one-model/no-retry preflight, the first bounded LiteLLM Responses
+request (`max_output_tokens: 16`) returned HTTP 200 from `deepseek-v4-flash` but
+spent its allowance on a reasoning preamble before reaching the requested answer.
+The owner then approved exactly one additional request with
+`max_output_tokens: 128`. That request returned HTTP 200 with response status
+`completed`, 95 input tokens, and 13 output tokens. Its Responses payload kept an
+11-token reasoning preamble in a completed `reasoning` item and returned exactly
+`OK` in the separate completed `message` item. This resolves provider admission
+and proves a semantic short response through the direct LiteLLM bridge. Consumers
+must judge or display the final `message` item rather than naively concatenating
+reasoning and message text. Neither request was retried and no fallback was used.
 
-The Windows OpenCode 1.1.53 client currently has no `OpenCode Go` entry in
-`opencode auth list`, and its model catalog consequently has no
-`opencode-go/deepseek-v4-flash` entry. This does not prove the standalone API key is
-invalid—the same key previously reached GLM—but it means the CLI cannot yet serve
-as the independent entitlement check. Follow the official provider flow in the
-TUI: `/connect` → **OpenCode Go**, enter the key locally, then use `/models`. This is
-a manual secret-handling action; automation must not read or copy the key.
+The first separately bounded real tool probe then returned HTTP 400 before a tool
+call because the diagnostic request forced `tool_choice: required`; DeepSeek V4
+thinking mode does not support that parameter. No retry or fallback followed that
+failure. Cloudflare OS's normal pi-ai path does not force `tool_choice`, so the
+diagnostic was corrected rather than weakening explicit tool-choice semantics.
+No second real tool probe is authorized by that failed call.
+
+The no-cost regression mock now rejects `tool_choice`, missing or changed
+`reasoning_content`, and null assistant tool-call content. The route also uses
+LiteLLM's `deepseek/` adapter: unlike the generic `openai/` adapter observed during
+diagnosis, it made a single upstream dispatch on the failing mock request. The
+request-local compatibility callback neither logs nor persists reasoning text.
+
+OpenCode's current documentation lists DeepSeek V4 Flash as not used for training,
+with zero-day retention and a ZDR agreement valid through 2026-08-31. The runtime
+admission response is the more specific authority for processing region: inference
+content is processed by the China-hosted deployment after the owner's opt-in.
+Before another real request, define one explicit call count and an output allowance
+large enough for the model's reasoning. The completed direct bridge probe does not
+authorize the still-pending in-app chat or tool-flow calls. Never paste the key into
+a chat, issue, command argument, or evidence file.
+
+The Windows-side OpenCode CLI is explicitly outside this pilot. Do not use it for
+authentication, entitlement checks, model discovery, or QA. If a future account
+or model-access failure cannot be resolved through the OpenCode Go web controls,
+stop and use the provider's official support path rather than connecting the
+Windows CLI as a workaround.
 
 ## Stop conditions
 
