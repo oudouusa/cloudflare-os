@@ -73,6 +73,21 @@ LiteLLM's `deepseek/` adapter: unlike the generic `openai/` adapter observed dur
 diagnosis, it made a single upstream dispatch on the failing mock request. The
 request-local compatibility callback neither logs nor persists reasoning text.
 
+At 12:02 and 12:03 JST, two owner-initiated in-app streams reached LiteLLM and
+returned HTTP 200 from the provider, but LiteLLM's Responses converter later
+raised `IndexError` on a successful stream chunk with `choices=[]`. These were two
+separate UI actions, not an automatic retry or fallback. The pinned converter's
+exact stack was captured without request bodies. A model-scoped empty-choices
+guard was then exercised against the strict local mock and loaded by recreating
+LiteLLM only; the Cloudflare OS container and state volume were unchanged.
+
+The owner's subsequent request to try real inference authorized one post-fix
+direct stream. It completed once with no retry/fallback: HTTP 200, status
+`completed`, one reasoning item, a final message exactly `OK`, and 91 input plus
+15 output tokens (106 total). No `IndexError` appeared. That one-call allowance is
+now consumed. A post-fix in-app chat or tool run requires a new explicit bounded
+approval; do not treat the direct bridge result as in-app acceptance.
+
 OpenCode's current documentation lists DeepSeek V4 Flash as not used for training,
 with zero-day retention and a ZDR agreement valid through 2026-08-31. The runtime
 admission response is the more specific authority for processing region: inference

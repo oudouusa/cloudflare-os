@@ -136,8 +136,11 @@ DeepSeek V4 thinking mode must not receive `tool_choice`. Cloudflare OS's normal
 pi-ai path leaves it unset. The local LiteLLM callback exists for the separate
 tool-result constraint: it replays the preceding `reasoning_content` and changes
 only a null assistant content field to an empty string immediately before the
-provider call. Do not use the callback to silently remove an explicitly requested
-tool choice.
+provider call. It also ignores content processing for DeepSeek stream metadata
+chunks whose `choices` list is empty, while leaving those chunks in LiteLLM's
+usage/final-response accumulator. LiteLLM 1.95.0 otherwise indexes `choices[0]`
+and can fail after an HTTP-200 inference. Do not use the callback to silently
+remove an explicitly requested tool choice.
 
 ## No-cost bridge QA
 
@@ -151,6 +154,11 @@ docker compose -p cloudflare-os-deepseek-mock \
   --env-file ops/home/qa/mock.env \
   -f ops/home/compose.yaml -f ops/home/qa/compose.mock.yaml \
   up -d --wait mock-opencode litellm
+
+docker compose -p cloudflare-os-deepseek-mock \
+  --env-file ops/home/qa/mock.env \
+  -f ops/home/compose.yaml -f ops/home/qa/compose.mock.yaml \
+  exec -T litellm python /qa/check-deepseek-stream-guard.py
 
 QA_LITELLM_BASE_URL=http://127.0.0.1:14002/v1 \
 QA_LITELLM_MASTER_KEY=sk-litellm-mock-only \
@@ -166,7 +174,9 @@ node ops/home/qa/verify-litellm-agent-bridge.mjs
 The first verifier has six PASS lines. Its last two assertions prove exactly three
 requests for the successful flow, then one deliberate `tool_choice` rejection with
 no retry. The mock also rejects null assistant tool-call content and any missing or
-changed reasoning replay. With `CFOS_DEEPSEEK_COMPAT_TRACE=1` set only by the mock
+changed reasoning replay. The Python regression check loads the callback inside
+the pinned LiteLLM image and exercises all three guarded private helpers with an
+empty choices list. With `CFOS_DEEPSEEK_COMPAT_TRACE=1` set only by the mock
 override, its structure-only trace shows the four total completion dispatches and
 never prints prompt or reasoning text. The second verifier proves five streaming
 turns: `createGadget`, `writeFile` twice, `executeCode`, and final text. The

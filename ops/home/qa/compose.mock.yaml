@@ -32,6 +32,8 @@ services:
       CFOS_DEEPSEEK_COMPAT_TRACE: "1"
       OPENCODE_GO_API_BASE: http://mock-opencode:4100/v1
       OPENCODE_GO_API_KEY: mock-opencode-key
+    volumes:
+      - ./qa/check-deepseek-stream-guard.py:/qa/check-deepseek-stream-guard.py:ro
     depends_on:
       mock-opencode:
         condition: service_healthy

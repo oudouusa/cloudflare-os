@@ -129,17 +129,22 @@ The preflight sends only unauthenticated GET requests. It verifies the expected
 client registration metadata, and PKCE S256. It does not register a client, open
 the authorization page, create a grant, or call a memory tool.
 
-Complete the owner-only UI flow over the approved Tailscale HTTPS origin:
+Complete the owner-only UI flow over the approved Tailscale HTTPS origin. The
+Connections panel belongs to a Gadget/workspace; it is not a global Settings item:
 
-1. In Cloudflare OS Connections, choose **Any MCP server** and enter the ASB
-   `/mcp` endpoint.
-2. At the ASB consent screen choose **read-only / 閲覧のみ**. Do not select
+1. Open the Gadget/workspace that should use ASB. In the right pane, select the
+   **Connections** tab next to **App** and **Code**.
+2. Select **Connect resource**, search for **Any MCP server**, and open it.
+3. In **Account**, select **Connect MCP Server**. On the page titled **Connect an
+   MCP server**, enter the existing ASB HTTPS `/mcp` endpoint and continue.
+4. At the ASB consent screen choose **read-only / 閲覧のみ**. Do not select
    read+write or read+capture.
-3. For **Tools**, select **Choose tools**, check only `memory_search`, and leave
+5. Back in the connection modal, under **Tools**, select **Choose tools**, check
+   only `memory_search`, and leave
    `memory_context`, `memory_history`, and every future tool unchecked.
-4. Attach that scoped resource only to the deliberate acceptance conversation;
+6. Select **Add connection**. Attach that scoped resource only to the deliberate acceptance conversation;
    do not make it ambient and do not bind it to an unrelated Gadget.
-5. Run one redacted search. Evidence may record only the tool name, success,
+7. Run one redacted search. Evidence may record only the tool name, success,
    timestamp, and result count—never the query or returned text.
 
 The ASB read grant is server-enforced: write and capture tools are not registered

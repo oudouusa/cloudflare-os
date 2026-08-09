@@ -16,6 +16,8 @@ grep -q '^  telemetry: false$' "${config}"
 grep -q '^  turn_off_message_logging: true$' "${config}"
 grep -q '^    - cfos_deepseek_compat.cfos_deepseek_compat$' "${config}"
 test -f "${compat}"
+test -f "${script_dir}/check-deepseek-stream-guard.py"
+grep -q '^_install_empty_stream_choices_guard()$' "${compat}"
 
 if grep -Eiq 'fallback|bedrock|gemini|nvidia|aws|zai' "${config}"; then
   printf 'FAIL forbidden provider or fallback route found in LiteLLM config\n' >&2

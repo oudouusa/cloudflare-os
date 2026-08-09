@@ -10,6 +10,7 @@ before provider dispatch. Nothing is logged or added to request metadata.
 
 import os
 from contextvars import ContextVar
+from functools import wraps
 from typing import Any
 
 from litellm.integrations.custom_logger import CustomLogger
@@ -107,6 +108,58 @@ def _restore_reasoning(data: dict[str, Any], reasoning: dict[str, str]) -> None:
             message["content"] = ""
 
 
+def _install_empty_stream_choices_guard() -> None:
+    """Ignore DeepSeek stream metadata chunks that contain no choices.
+
+    OpenCode Go can emit a successful Chat Completions stream chunk with
+    ``choices=[]``. LiteLLM 1.95.0's Responses bridge indexes ``choices[0]`` in
+    three private helpers, causing a late HTTP-200 stream failure after the
+    provider has already completed inference. Keep the chunk available to the
+    iterator's usage/final-response accumulator, but make the content-specific
+    helpers no-ops for this one pinned model route.
+    """
+    from litellm.responses.litellm_completion_transformation.streaming_iterator import (
+        LiteLLMCompletionStreamingIterator,
+    )
+
+    iterator = LiteLLMCompletionStreamingIterator
+    if getattr(iterator, "_cfos_empty_choices_guard_installed", False):
+        return
+
+    original_delta = iterator._get_delta_string_from_streaming_choices
+    original_ensure = iterator._ensure_output_item_for_chunk
+    original_reasoning_end = iterator._is_reasoning_end
+
+    @wraps(original_delta)
+    def guarded_delta(self: Any, choices: list[Any]) -> str:
+        if _is_deepseek_v4_flash(getattr(self, "model", None)) and not choices:
+            return ""
+        return original_delta(self, choices)
+
+    @wraps(original_ensure)
+    def guarded_ensure(self: Any, chunk: Any) -> None:
+        if (
+            _is_deepseek_v4_flash(getattr(self, "model", None))
+            and not getattr(chunk, "choices", None)
+        ):
+            return None
+        return original_ensure(self, chunk)
+
+    @wraps(original_reasoning_end)
+    def guarded_reasoning_end(self: Any, chunk: Any) -> bool:
+        if (
+            _is_deepseek_v4_flash(getattr(self, "model", None))
+            and not getattr(chunk, "choices", None)
+        ):
+            return False
+        return original_reasoning_end(self, chunk)
+
+    iterator._get_delta_string_from_streaming_choices = guarded_delta
+    iterator._ensure_output_item_for_chunk = guarded_ensure
+    iterator._is_reasoning_end = guarded_reasoning_end
+    iterator._cfos_empty_choices_guard_installed = True
+
+
 class CloudflareOsDeepSeekCompat(CustomLogger):
     """Preserve DeepSeek V4 thinking context across LiteLLM's API bridge."""
 
@@ -131,4 +184,5 @@ class CloudflareOsDeepSeekCompat(CustomLogger):
         return kwargs
 
 
+_install_empty_stream_choices_guard()
 cfos_deepseek_compat = CloudflareOsDeepSeekCompat()

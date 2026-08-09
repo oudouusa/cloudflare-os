@@ -87,6 +87,16 @@ conversion drops that item on the tool-result turn. The read-only mounted
 async-local variable for that request and restores it immediately before provider
 dispatch. It does not add request metadata, persist bodies, or log content.
 
+The OpenCode stream can also contain a successful metadata or usage chunk with an
+empty `choices` list. LiteLLM 1.95.0's Responses streaming converter assumes
+`choices[0]` in three content helpers and otherwise raises `IndexError` after the
+provider has already returned HTTP 200. The same compatibility module installs a
+model-scoped guard that makes only those content helpers no-ops for empty-choice
+DeepSeek chunks. The iterator still snapshots the chunk, so final response and
+usage assembly retain it. A runtime regression check imports the callback inside
+the digest-pinned image; the normal, tool, and five-turn streaming mock suites
+cover non-empty chunks unchanged.
+
 The local mock is deliberately stricter than a simple text smoke: it rejects
 `tool_choice`, null assistant content, and missing or changed reasoning context.
 It proves the normal response, function call, exact reasoning replay, and function

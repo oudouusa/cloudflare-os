@@ -93,6 +93,12 @@ renders `2 + 2 = 4`, survives reload, and survives a Cloudflare OS container
 restart without another provider request. This is full application integration
 evidence, not evidence that the real model chose and executed the tools.
 
+`check-deepseek-stream-guard.py` must run inside the pinned LiteLLM image after
+the callback is imported. It proves empty-choice DeepSeek metadata chunks are
+ignored by the converter's output-item, reasoning-end, and text-delta helpers.
+The chunk remains available to LiteLLM's stream accumulator; the normal bridge
+and five-turn agent suites prove the guard does not change content-bearing chunks.
+
 ## Runtime acceptance matrix
 
 | Property | Required evidence | Paid inference? |
@@ -149,7 +155,7 @@ Completed against official base
 | Final image | Current rebuilt manifest `sha256:fe0b6c57b6ab9bbb6b9c00aa5d1cd562a756453a051d6cd0c6c72b6246e5db0b`, 404,136,718 bytes; Docker reused the previously verified application COPY/build layers |
 | Toolchain in image | Node 22.14.0, pnpm 11.17.0, Wrangler 4.119.0 |
 | Symlinks | Exact 23 paths/targets pass on host, at build time, and in final image |
-| Secret scan | Pass over 859 tracked/untracked non-ignored candidate files after the optional CLIProxyAPI audit documentation |
+| Secret scan | Pass over 860 tracked/untracked non-ignored candidate files after the empty-choices regression check was added |
 | LiteLLM mock bridge | Catalog, text, function call, reasoning replay/function output, and exact dispatch-count assertions pass |
 | Main runtime | HTTP 200; Cloudflare OS and LiteLLM healthy; host ports 8877/4001 loopback-only |
 | Gatekeeper URL | Runtime logs show MCP and other Gatekeepers derived from `http://127.0.0.1:8877` |
@@ -174,6 +180,9 @@ Completed against official base
 | Mock isolation guard | A diagnostic restart command omitted the mock port/volume variables and selected the base names. Port 4001 was already occupied, so the mistakenly configured Cloudflare OS never started; the live stack remained healthy/HTTP 200 and no volume was deleted. The mock overlay now uses `!override` ports plus fixed isolated volume names, and resolved config proves 18878/14002 plus `cloudflare-os-inapp-mock-*` with no manual overrides. |
 | DeepSeek real bridge | The initial LiteLLM and direct requests returned 403; the later provider message identified a required opt-in for the China-hosted latest model. After the owner enabled it, a no-retry 16-token probe returned HTTP 200 but stopped during reasoning. One separately approved no-retry 128-token probe then returned HTTP 200/`completed`: a completed `reasoning` item used 11 reasoning tokens and the separate completed `message` item was exactly `OK` (95 input, 13 output tokens total). Provider admission and the direct LiteLLM semantic short-response bridge pass; in-app chat remains untested. |
 | DeepSeek real tool preflight | One bounded diagnostic forced `tool_choice: required` and returned HTTP 400 because DeepSeek V4 thinking mode rejects that parameter. No retry/fallback followed. The strict mock now covers the corrected no-`tool_choice` payload plus required reasoning replay; a second real tool call remains unexecuted. |
+| DeepSeek empty-choices incident | Two owner-initiated in-app streams at 12:02 and 12:03 JST each reached the provider and returned HTTP 200, then LiteLLM 1.95.0 raised `IndexError` because its Responses stream converter indexed `choices[0]` on an empty-choice metadata chunk. They were separate UI actions, not automatic retries. Cloudflare OS surfaced `Error: list index out of range`; no fallback was configured. |
+| DeepSeek empty-choices guard | The compatibility module now guards three pinned LiteLLM content helpers only for empty-choice `deepseek-v4-flash` chunks. A runtime check inside the digest-pinned image passes; normal Responses, function round-trip, five-turn streaming agent, and usage-request mock tests pass with zero `IndexError`. |
+| Post-guard real stream | LiteLLM alone was recreated healthy while the Cloudflare OS container remained unchanged. One newly approved live streaming Responses request returned HTTP 200/`completed`, one reasoning item, one message exactly `OK`, and 91 input + 15 output = 106 tokens. The LiteLLM log records one POST and no `IndexError`; retry/fallback remained disabled. This proves the live direct stream fix, not a post-fix in-app run. |
 | Live compatibility deployment | LiteLLM alone was recreated with the DeepSeek adapter and read-only compatibility callback. On 2026-08-09 it was recreated again after the multi-turn reasoning reset fix; runtime source inspection proves the new reset paths are loaded. It returned healthy, exposed only `deepseek-v4-flash`, and remained bound to `127.0.0.1:4001`; Cloudflare OS kept the same container ID and healthy state on `127.0.0.1:8877`. No inference was made. |
 | Post-compatibility soak | The earlier 720-second run and a new 600-second run after loading the multi-turn callback both kept container IDs unchanged, both services healthy, and restart counts unchanged. No inference was made. |
 | OpenCode Go admission check | Windows-side OpenCode CLI remains excluded. The owner used the OpenCode web workspace setting for China-hosted model consent; no local CLI credential or model catalog was used. |
@@ -184,6 +193,7 @@ Completed against official base
 | ASB OAuth preflight | Production `/mcp` returns the protected-resource challenge; same-origin OAuth discovery, dynamic registration metadata, and PKCE S256 pass; the Cloudflare OS container reaches the same 401 boundary without a credential |
 | Optional CLIProxyAPI read-only audit | GreenVPS identity was verified before inspection. CLIProxyAPI v7.2.99 is healthy as a container and publishes 8317 only on the VPS Tailscale address and loopback. From the Cloudflare OS container, unauthenticated `/v1/models` and `/v1/responses` both reached the service and returned 401; no inference occurred. Exact-tag source registers `/v1/responses` and GPT-5.6 models. Authenticated compatibility remains untested because the sole existing key is shared and may not be reused. The VPS was 98% full with about 1.6 GiB free; no cleanup or mutation was performed. |
 | Final 2026-08-09 static rerun | Symlink, one-route/no-fallback config, secret, private-env, shell/Node/Python syntax, base/mock Compose, and diff checks pass. Official `pnpm lint`, `pnpm build`, and `pnpm test` pass; lint/build emit only the same upstream warnings and all executed workspace tests pass with documented skips. |
+| Post-empty-choices full rerun | The runtime guard check, normal/function/five-turn streaming mock suites, base/mock Compose, symlinks, one-route config, private env, 860-file secret scan, shell/Node/Python syntax, and diff checks pass. Official `pnpm lint`, `pnpm build`, and `pnpm test` pass again; only the documented upstream warnings/skips remain. |
 
 The first bridge attempt was made while LiteLLM health was still `starting` and
 reset its connection; the same test passed once healthy. The first restore attempt
@@ -204,9 +214,9 @@ under an unsupported environment name. It returned HTTP 400 before any inference
 The script now accepts `QA_LITELLM_BASE_URL`; the isolated-port rerun passed the
 strict suite and the temporary project was removed without touching live volumes.
 
-Not yet accepted: a complete **real-model** DeepSeek in-app normal response and
-real-model-selected Gadget tool execution, authenticated remote browser
-reload/reconnect after restart, and ASB `memory_search` through Gatekeeper.
+Not yet accepted: a complete post-fix **real-model** DeepSeek in-app normal
+response and real-model-selected Gadget tool execution, plus ASB `memory_search`
+through Gatekeeper.
 The Goal remains incomplete until these are evidenced.
 
 ## Goal acceptance audit
@@ -219,10 +229,10 @@ The Goal remains incomplete until these are evidenced.
 | 1 | Official source and 23 symlinks | Proven | Git ancestry plus exact host/build/image path-target checks |
 | 2 | `main`/`home` separation and sync procedure | Proven | `main` remains at/tracks `upstream/main`; committed `home` tracks `origin/home`; documented sync avoids history rewriting |
 | 3 | Complete home-reference classification | Proven | `home-reference-audit.md` covers every required file group and evidence family |
-| 4 | Real owner-selected OpenCode Go normal and agent tool flow | Partial | Historical GLM proof, strict bridge suites, and the isolated full Cloudflare OS mock all pass; the latter proves normal streaming, actual Cloudflare OS tool execution, file artifacts, test output, rendered Gadget, and restart persistence. After owner opt-in, the real DeepSeek LiteLLM bridge returns a completed final `OK`; the separate reasoning item must not be treated as final answer text. The same in-app flow with the real model remains pending. |
+| 4 | Real owner-selected OpenCode Go normal and agent tool flow | Partial | Historical GLM proof, strict bridge suites, and the isolated full Cloudflare OS mock all pass. The first two real DeepSeek in-app streams reached HTTP 200 but exposed LiteLLM's empty-choice converter bug; the guarded direct live stream now completes with final `OK`. A post-fix in-app normal response and real-model-selected tool/artifact/test flow remain pending. |
 | 5 | No fallback and Use balance OFF | Proven | Static/runtime one-route proof passes; owner confirmed Use balance OFF on 2026-08-09 and the private ledger records no billing identifier |
 | 6 | Loopback-only host binds | Proven | Docker publishes and `ss` show only 127.0.0.1 on all active diagnostic/application ports |
-| 7 | Tailnet-only Tailscale path | Partial | Approved Serve has one private HTTPS root route, zero Funnel ports, and Windows-client HTTP/WSS proof before and after app recreate; authenticated chat reload and state-continuity proof remain missing |
+| 7 | Tailnet-only Tailscale path | Proven | Approved Serve has one private HTTPS root route and zero Funnel ports. Windows-client HTTP and two independent WSS connections passed before and after app recreate; on 2026-08-09 the owner additionally confirmed login over the Tailscale HTTPS origin, opening an existing chat, and successful browser reload with its state retained. |
 | 8 | `.wrangler` restart persistence | Proven | Known sentinel SHA survives crash recovery, graceful stop, recreate, and restart |
 | 9 | New-volume restore of real data | Proven | In addition to the owner DO/model/session-key restore, actual isolated Cloudflare OS account, chat, four tool rows, Gadget files, test result, and rendered `2 + 2 = 4` artifact were restored from a checksummed backup into new labeled volumes. The mock provider count stayed zero; source/live volumes were not overwritten or removed. Wrangler 4.119.0 Gadget-preview flakiness under overlapping dev stacks remains an Early Access operations constraint, not missing restore evidence. |
 | 10 | ASB read-only Gatekeeper search | Partial | Production discovery and container reachability pass. Source inspection proves a read grant registers only three read tools and marks `memory_search` read-only. Owner OAuth consent, a named-tool-only Cloudflare OS grant, and actual Gatekeeper `memory_search` evidence remain missing. |
