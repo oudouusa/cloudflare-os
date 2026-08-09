@@ -776,26 +776,53 @@ main().catch(error => {
 
 new ResizeObserver(postHeight).observe(document.documentElement);
 
+// Split one axis of a scroll gesture between a nested scroller and its parent. Browser scroll
+// chaining normally preserves this remainder, but the configurator is in an iframe so we have to
+// hand it to the host ourselves.
+function splitScrollDelta(position, viewportSize, contentSize, delta) {
+  const maxPosition = Math.max(0, contentSize - viewportSize);
+  const boundedPosition = Math.min(maxPosition, Math.max(0, position));
+  const nextPosition = Math.min(maxPosition, Math.max(0, boundedPosition + delta));
+  return {
+    position: nextPosition,
+    remainder: delta - (nextPosition - boundedPosition),
+  };
+}
+
 // Forward wheel/touch scrolls to the parent so the user can scroll the host modal even when the
-// cursor is over the iframe. Events that something inside the iframe can consume itself are left
-// alone, so a scrollable control scrolls rather than moving the modal underneath it.
-//
-function hasInternalScroller(target, deltaX, deltaY) {
+// pointer is over the iframe. Return null while an internal control can consume the whole gesture,
+// preserving native trackpad and touch momentum. At its edge, consume only the part that fits and
+// return the exact remainder for the parent.
+function prepareScrollHandoff(target, deltaX, deltaY) {
   const scroller = target instanceof Element ? target.closest("[data-internal-scroller]") : null;
-  if (!scroller) return false;
-  // ponytail: configurator controls mark their own scroller; add the marker to future controls.
-  if (deltaY < 0 && scroller.scrollTop > 0) return true;
-  if (deltaY > 0 && scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 1) return true;
-  if (deltaX < 0 && scroller.scrollLeft > 0) return true;
-  return deltaX > 0 && scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
+  if (!scroller) return { deltaX, deltaY };
+
+  const horizontal = splitScrollDelta(
+    scroller.scrollLeft, scroller.clientWidth, scroller.scrollWidth, deltaX);
+  const vertical = splitScrollDelta(
+    scroller.scrollTop, scroller.clientHeight, scroller.scrollHeight, deltaY);
+  if (horizontal.remainder === 0 && vertical.remainder === 0) return null;
+
+  if (horizontal.position !== scroller.scrollLeft) scroller.scrollLeft = horizontal.position;
+  if (vertical.position !== scroller.scrollTop) scroller.scrollTop = vertical.position;
+  return {
+    deltaX: horizontal.remainder,
+    deltaY: vertical.remainder,
+  };
 }
 
 window.addEventListener("wheel", event => {
-  // Returning leaves the event to the browser, which already scrolls the right element inside the
-  // iframe -- including trackpad momentum, which a manual scrollBy would lose.
-  if (hasInternalScroller(event.target, event.deltaX, event.deltaY)) return;
-  forwardScroll(event.deltaX, event.deltaY);
-}, { passive: true });
+  // Preserve browser zoom gestures rather than turning their wheel component into modal scrolling.
+  if (event.ctrlKey) return;
+  const remaining = prepareScrollHandoff(event.target, event.deltaX, event.deltaY);
+  if (!remaining) return;
+  // The iframe cannot natively chain scrolling into its parent. Suppress its overscroll and forward
+  // the whole unconsumed portion instead.
+  event.preventDefault();
+  if (remaining.deltaX || remaining.deltaY) {
+    forwardScroll(remaining.deltaX, remaining.deltaY);
+  }
+}, { passive: false });
 
 let pendingScrollX = 0;
 let pendingScrollY = 0;
@@ -831,9 +858,13 @@ window.addEventListener("touchmove", event => {
   const deltaX = lastTouchX - touch.clientX;
   lastTouchY = touch.clientY;
   lastTouchX = touch.clientX;
-  if (hasInternalScroller(event.target, deltaX, deltaY)) return;
-  forwardScroll(deltaX, deltaY);
-}, { passive: true });
+  const remaining = prepareScrollHandoff(event.target, deltaX, deltaY);
+  if (!remaining) return;
+  event.preventDefault();
+  if (remaining.deltaX || remaining.deltaY) {
+    forwardScroll(remaining.deltaX, remaining.deltaY);
+  }
+}, { passive: false });
 `;
 
   return `<!DOCTYPE html>

@@ -223,3 +223,83 @@ describe("generated configurator option sanitizing", () => {
     assert.deepEqual(entries, { "tools:new": { status: "ready", disabled: false } });
   });
 });
+
+describe("generated configurator scroll handoff", () => {
+  it("leaves a fully consumable gesture to native inner scrolling", async () => {
+    const OriginalElement = globalThis.Element;
+    class FakeElement {
+      closest() { return this; }
+    }
+    globalThis.Element = FakeElement;
+    try {
+      const { prepareScrollHandoff } = readRuntimeFunctions(
+        await readRuntime(fixtureDir), "splitScrollDelta", "prepareScrollHandoff");
+      const scroller = Object.assign(new FakeElement(), {
+        clientHeight: 264,
+        clientWidth: 300,
+        scrollHeight: 600,
+        scrollLeft: 0,
+        scrollTop: 100,
+        scrollWidth: 300,
+      });
+
+      assert.equal(prepareScrollHandoff(scroller, 0, 24), null);
+      assert.equal(scroller.scrollTop, 100);
+    } finally {
+      globalThis.Element = OriginalElement;
+    }
+  });
+
+  it("preserves the unconsumed wheel delta when an inner scroller reaches an edge", async () => {
+    const { splitScrollDelta } = readRuntimeFunctions(
+      await readRuntime(fixtureDir), "splitScrollDelta");
+
+    assert.deepEqual(splitScrollDelta(250, 264, 600, 100), {
+      position: 336,
+      remainder: 14,
+    });
+    assert.deepEqual(splitScrollDelta(8, 264, 600, -40), {
+      position: 0,
+      remainder: -32,
+    });
+  });
+
+  it("keeps the entire delta in one scroller when it fits", async () => {
+    const { splitScrollDelta } = readRuntimeFunctions(
+      await readRuntime(fixtureDir), "splitScrollDelta");
+
+    assert.deepEqual(splitScrollDelta(100, 264, 600, 24), {
+      position: 124,
+      remainder: 0,
+    });
+    assert.deepEqual(splitScrollDelta(0, 264, 200, 50), {
+      position: 0,
+      remainder: 50,
+    });
+  });
+
+  it("moves an inner scroller to its edge before handing the remainder to the host", async () => {
+    const OriginalElement = globalThis.Element;
+    class FakeElement {
+      closest() { return this; }
+    }
+    globalThis.Element = FakeElement;
+    try {
+      const { prepareScrollHandoff } = readRuntimeFunctions(
+        await readRuntime(fixtureDir), "splitScrollDelta", "prepareScrollHandoff");
+      const scroller = Object.assign(new FakeElement(), {
+        clientHeight: 264,
+        clientWidth: 300,
+        scrollHeight: 600,
+        scrollLeft: 0,
+        scrollTop: 250,
+        scrollWidth: 300,
+      });
+
+      assert.deepEqual(prepareScrollHandoff(scroller, 0, 100), { deltaX: 0, deltaY: 14 });
+      assert.equal(scroller.scrollTop, 336);
+    } finally {
+      globalThis.Element = OriginalElement;
+    }
+  });
+});

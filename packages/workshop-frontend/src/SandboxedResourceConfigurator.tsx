@@ -19,6 +19,16 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
+export function applyForwardedConfiguratorScroll(
+  target: HTMLElement | null,
+  deltaX: number,
+  deltaY: number,
+): void {
+  if (target && target.scrollHeight > target.clientHeight) {
+    target.scrollBy({ top: deltaY, left: deltaX })
+  }
+}
+
 class ResourceConfiguratorHostImpl extends RpcTarget implements ResourceConfiguratorHost {
   readonly #gatekeeper: RpcStub<RpcTarget>
 
@@ -91,8 +101,6 @@ export default function SandboxedResourceConfigurator({
   const iframeConnectedRef = useRef(false)
   const iframeInvalidatedRef = useRef(false)
   const iframeLoadCountRef = useRef(0)
-  const pendingScrollRef = useRef({ x: 0, y: 0 })
-  const scrollFrameRef = useRef<number | null>(null)
   const [height, setHeight] = useState(MIN_CONFIGURATOR_HEIGHT)
   const [layoutHeight, setLayoutHeight] = useState(MIN_CONFIGURATOR_HEIGHT)
   const [frameRect, setFrameRect] = useState<{ top: number, left: number, width: number } | null>(null)
@@ -265,20 +273,8 @@ export default function SandboxedResourceConfigurator({
   }
 
   const applyForwardedScroll = (deltaX: number, deltaY: number) => {
-    pendingScrollRef.current.x += deltaX
-    pendingScrollRef.current.y += deltaY
-    if (scrollFrameRef.current !== null) return
-    scrollFrameRef.current = requestAnimationFrame(() => {
-      scrollFrameRef.current = null
-      const deltaX = clamp(pendingScrollRef.current.x, -SCROLL_FORWARD_MAX_DELTA, SCROLL_FORWARD_MAX_DELTA)
-      const deltaY = clamp(pendingScrollRef.current.y, -SCROLL_FORWARD_MAX_DELTA, SCROLL_FORWARD_MAX_DELTA)
-      pendingScrollRef.current = { x: 0, y: 0 }
-      if (deltaY === 0 && deltaX === 0) return
-      const target = findScrollAncestor()
-      if (target && target.scrollHeight > target.clientHeight) {
-        target.scrollBy({ top: deltaY, left: deltaX })
-      }
-    })
+    if (deltaY === 0 && deltaX === 0) return
+    applyForwardedConfiguratorScroll(findScrollAncestor(), deltaX, deltaY)
   }
 
   useLayoutEffect(() => {
@@ -372,7 +368,6 @@ export default function SandboxedResourceConfigurator({
     window.addEventListener('message', handleMessage)
     return () => {
       window.removeEventListener('message', handleMessage)
-      if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current)
       onSelectionReadyChange?.(null)
       iframeRpcRef.current?.[Symbol.dispose]?.()
       iframeRpcRef.current = null
