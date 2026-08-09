@@ -68,13 +68,15 @@ def _collect_reasoning(input_items: object) -> dict[str, str]:
         item_type = item.get("type")
         if item_type == "reasoning":
             text = _reasoning_text(item)
-            if text:
-                pending.append(text)
+            pending = [text] if text else []
             continue
         if item_type in ("function_call", "custom_tool_call"):
             call_id = item.get("call_id") or item.get("id")
             if isinstance(call_id, str) and call_id and pending:
                 result[call_id] = "\n".join(pending)
+            continue
+        if item_type in ("function_call_output", "custom_tool_call_output", "tool_result"):
+            pending.clear()
             continue
         if item_type == "message" and item.get("role") in ("user", "developer", "system"):
             pending.clear()

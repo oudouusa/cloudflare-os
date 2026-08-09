@@ -26,6 +26,8 @@ services:
       start_period: 3s
 
   litellm:
+    ports: !override
+      - 127.0.0.1:${MOCK_LITELLM_HOST_PORT:-14002}:4000
     environment:
       CFOS_DEEPSEEK_COMPAT_TRACE: "1"
       OPENCODE_GO_API_BASE: http://mock-opencode:4100/v1
@@ -33,3 +35,15 @@ services:
     depends_on:
       mock-opencode:
         condition: service_healthy
+
+  cloudflare-os:
+    environment:
+      PUBLIC_BASE_URL: http://127.0.0.1:${MOCK_CFOS_HOST_PORT:-18878}
+    ports: !override
+      - 127.0.0.1:${MOCK_CFOS_HOST_PORT:-18878}:8877
+
+volumes:
+  cloudflare_os_wrangler:
+    name: cloudflare-os-inapp-mock-wrangler
+  cloudflare_os_pnpm_store:
+    name: cloudflare-os-inapp-mock-pnpm-store

@@ -100,8 +100,9 @@ China-hosted deployment consent in the OpenCode web console. A first no-retry
 16-token LiteLLM request ended during the model's reasoning preamble. One separately
 approved no-retry 128-token request then returned HTTP 200/`completed`, with
 reasoning in its own item and exactly `OK` in the final message item. The direct
-LiteLLM semantic short-response bridge therefore passes; a complete in-app response
-and agent tool call remain open. The consent affects inference data residency even
+LiteLLM semantic short-response bridge therefore passes; a complete **real-model**
+in-app response and agent tool call remain open. The consent affects inference data
+residency even
 though OpenCode currently lists zero-day retention for this model. **Use balance**
 remains OFF.
 
@@ -140,14 +141,14 @@ tool choice.
 
 ## No-cost bridge QA
 
-This starts only LiteLLM and the local mock provider in a separate Compose project;
-it does not call OpenCode or replace the always-on services:
+This starts LiteLLM and the local mock provider in a separate Compose project. The
+mock overlay forcibly replaces the application and LiteLLM host ports with 18878
+and 14002 and uses only `cloudflare-os-inapp-mock-*` volumes. It does not call
+OpenCode or replace the always-on services:
 
 ```bash
-LITELLM_HOST_PORT=14002 \
-LITELLM_MASTER_KEY=sk-litellm-mock-only \
-OPENCODE_GO_API_KEY=mock-opencode-key \
 docker compose -p cloudflare-os-deepseek-mock \
+  --env-file ops/home/qa/mock.env \
   -f ops/home/compose.yaml -f ops/home/qa/compose.mock.yaml \
   up -d --wait mock-opencode litellm
 
@@ -155,29 +156,71 @@ QA_LITELLM_BASE_URL=http://127.0.0.1:14002/v1 \
 QA_LITELLM_MASTER_KEY=sk-litellm-mock-only \
 QA_MOCK_BASE_URL=http://127.0.0.1:14100 \
 node ops/home/qa/verify-litellm-bridge.mjs
+
+QA_LITELLM_BASE_URL=http://127.0.0.1:14002/v1 \
+QA_LITELLM_MASTER_KEY=sk-litellm-mock-only \
+QA_MOCK_BASE_URL=http://127.0.0.1:14100 \
+node ops/home/qa/verify-litellm-agent-bridge.mjs
 ```
 
-Expected output has six PASS lines. The last two assertions prove exactly three
+The first verifier has six PASS lines. Its last two assertions prove exactly three
 requests for the successful flow, then one deliberate `tool_choice` rejection with
 no retry. The mock also rejects null assistant tool-call content and any missing or
 changed reasoning replay. With `CFOS_DEEPSEEK_COMPAT_TRACE=1` set only by the mock
 override, its structure-only trace shows the four total completion dispatches and
-never prints prompt or reasoning text. The temporary mock diagnostic port is
-published only on `127.0.0.1:14100`.
+never prints prompt or reasoning text. The second verifier proves five streaming
+turns: `createGadget`, `writeFile` twice, `executeCode`, and final text. The
+temporary diagnostic port is published only on `127.0.0.1:14100`.
+
+For full in-app QA, start all three isolated services and use the fixed Playwright
+checkout described in `docs/HOME_TESTING.md`:
+
+```bash
+docker compose -p cloudflare-os-deepseek-mock \
+  --env-file ops/home/qa/mock.env \
+  -f ops/home/compose.yaml -f ops/home/qa/compose.mock.yaml \
+  up -d --wait
+
+CFOS_PLAYWRIGHT_ROOT=/absolute/path/to/cloudflare-os-home/qa \
+CFOS_BROWSER_BASE_URL=http://127.0.0.1:18878 \
+CFOS_CONFIRM_ISOLATED_MOCK=yes \
+node ops/home/qa/verify-inapp-mock.mjs
+```
+
+The script prints the created `agentUrl`. To prove persistence without a new model
+request, restart only isolated Cloudflare OS, then pass that URL back:
+
+```bash
+docker compose -p cloudflare-os-deepseek-mock \
+  --env-file ops/home/qa/mock.env \
+  -f ops/home/compose.yaml -f ops/home/qa/compose.mock.yaml \
+  restart cloudflare-os
+
+CFOS_PLAYWRIGHT_ROOT=/absolute/path/to/cloudflare-os-home/qa \
+CFOS_BROWSER_BASE_URL=http://127.0.0.1:18878 \
+CFOS_CONFIRM_ISOLATED_MOCK=yes \
+CFOS_VERIFY_WORKSPACE_URL='paste-the-agentUrl-here' \
+node ops/home/qa/verify-inapp-mock.mjs
+```
+
+This uses intentionally public, inert mock credentials. It proves the UI, model
+registration, streaming, tool events, Gadget files and test execution, rendered
+`2 + 2 = 4` artifact, acceptance, reload/mobile behavior, and account/chat/Gadget
+persistence after container restart. It does not prove that the real DeepSeek
+model chose the tools.
 
 Remove only this temporary project after the test. It never mounts the live
 `.wrangler` volume, and `-v` remains forbidden:
 
 ```bash
-LITELLM_HOST_PORT=14002 \
-LITELLM_MASTER_KEY=sk-litellm-mock-only \
-OPENCODE_GO_API_KEY=mock-opencode-key \
 docker compose -p cloudflare-os-deepseek-mock \
+  --env-file ops/home/qa/mock.env \
   -f ops/home/compose.yaml -f ops/home/qa/compose.mock.yaml \
   down --remove-orphans
 ```
 
-Never use `docker compose down -v`.
+Never use `docker compose down -v`. The full-app verification volume is retained
+by default; report it before any later manual cleanup.
 
 ## Daily operations
 

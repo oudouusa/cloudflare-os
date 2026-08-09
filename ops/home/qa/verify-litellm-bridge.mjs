@@ -6,6 +6,14 @@ const masterKey = process.env.QA_LITELLM_MASTER_KEY ?? "sk-litellm-mock-only";
 const mockBaseUrl = process.env.QA_MOCK_BASE_URL;
 const mockApiKey = process.env.QA_MOCK_API_KEY ?? "mock-opencode-key";
 
+async function mockStats() {
+  const response = await fetch(`${mockBaseUrl}/qa/stats`, {
+    headers: { authorization: `Bearer ${mockApiKey}` },
+  });
+  assert.equal(response.ok, true, `mock stats failed with HTTP ${response.status}`);
+  return response.json();
+}
+
 async function request(path, init = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
@@ -20,6 +28,7 @@ async function request(path, init = {}) {
   return body;
 }
 
+const beforeStats = mockBaseUrl ? await mockStats() : null;
 const models = await request("/models");
 assert.deepEqual(models.data.map(model => model.id), ["deepseek-v4-flash"]);
 console.log("PASS authenticated model catalog contains only deepseek-v4-flash");
@@ -88,12 +97,9 @@ assert.equal(resultText, "mock tool round-trip complete");
 console.log("PASS function output completed the Responses API tool round-trip");
 
 if (mockBaseUrl) {
-  let statsResponse = await fetch(`${mockBaseUrl}/qa/stats`, {
-    headers: { authorization: `Bearer ${mockApiKey}` },
-  });
-  assert.equal(statsResponse.ok, true, `mock stats failed with HTTP ${statsResponse.status}`);
-  let stats = await statsResponse.json();
-  assert.deepEqual(stats, { chatCompletionRequests: 3, compatibilityFailures: 0 });
+  let stats = await mockStats();
+  assert.equal(stats.chatCompletionRequests - beforeStats.chatCompletionRequests, 3);
+  assert.equal(stats.compatibilityFailures - beforeStats.compatibilityFailures, 0);
   console.log("PASS successful bridge flow made exactly three provider requests");
 
   const rejected = await fetch(`${baseUrl}/responses`, {
@@ -117,11 +123,8 @@ if (mockBaseUrl) {
   });
   assert.equal(rejected.status, 400);
 
-  statsResponse = await fetch(`${mockBaseUrl}/qa/stats`, {
-    headers: { authorization: `Bearer ${mockApiKey}` },
-  });
-  assert.equal(statsResponse.ok, true, `mock stats failed with HTTP ${statsResponse.status}`);
-  stats = await statsResponse.json();
-  assert.deepEqual(stats, { chatCompletionRequests: 4, compatibilityFailures: 1 });
+  const rejectedStats = await mockStats();
+  assert.equal(rejectedStats.chatCompletionRequests - stats.chatCompletionRequests, 1);
+  assert.equal(rejectedStats.compatibilityFailures - stats.compatibilityFailures, 1);
   console.log("PASS unsupported tool_choice was rejected once without a retry");
 }
