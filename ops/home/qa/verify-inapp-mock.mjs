@@ -41,6 +41,32 @@ const context = await browser.newContext({
 const page = await context.newPage();
 page.on("pageerror", error => console.error(`[browser:pageerror] ${error.message}`));
 
+function safeUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? `${url.origin}${url.pathname}`
+      : url.protocol;
+  } catch {
+    return "<invalid-url>";
+  }
+}
+
+page.on("requestfailed", request => {
+  console.error(
+    `[browser:requestfailed] ${request.method()} ${safeUrl(request.url())} ` +
+    `${request.failure()?.errorText ?? "unknown"}`,
+  );
+});
+page.on("response", response => {
+  if (response.status() >= 400) {
+    console.error(
+      `[browser:response] ${response.status()} ${response.request().method()} ` +
+      `${safeUrl(response.url())}`,
+    );
+  }
+});
+
 async function screenshot(name) {
   const path = resolve(evidenceDir, `${name}.png`);
   await page.screenshot({ path, fullPage: true });
@@ -160,7 +186,10 @@ async function assertRenderedGadget() {
     }
     await page.waitForTimeout(500);
   }
-  throw new Error("Gadget iframe never rendered the tested 2 + 2 = 4 artifact");
+  const frameUrls = page.frames().map(frame => safeUrl(frame.url()));
+  throw new Error(
+    `Gadget iframe never rendered the tested 2 + 2 = 4 artifact; frames=${JSON.stringify(frameUrls)}`,
+  );
 }
 
 async function assertAgentEvidence() {

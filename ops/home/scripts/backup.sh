@@ -119,7 +119,7 @@ docker run --rm \
   --volume "${volume_name}:/source:ro" \
   --volume "${destination}:/backup" \
   "${image_name}" \
-  sh -c 'cd /source && tar --numeric-owner -cpf /backup/wrangler.tar .'
+  sh -c 'test -d /source/state && cd /source && tar --numeric-owner -cpf /backup/wrangler.tar ./state'
 
 upstream_sha="$(git -C "${repo_root}" rev-parse upstream/main)"
 home_sha="$(git -C "${repo_root}" rev-parse HEAD)"
@@ -140,6 +140,7 @@ compose_hash="$("${compose[@]}" config --no-interpolate | sha256sum | cut -d' ' 
   printf 'compose_project=%s\n' "${compose_project_name:-default}"
   printf 'offline_source=%s\n' "${offline_volume}"
   printf 'source_volume=%s\n' "${volume_name}"
+  printf 'archive_scope=wrangler-state-only-v1\n'
 } >"${destination}/metadata.txt"
 
 (

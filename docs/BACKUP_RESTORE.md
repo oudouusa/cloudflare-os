@@ -1,8 +1,9 @@
 # Backup and restore
 
-Cloudflare OS local state lives in the `.wrangler` named volume. The archive can
-contain credentials, account records, chats, and Gadgets. Keep it in an owner-only
-Linux directory, never under `/mnt/c`, and treat it as secret material.
+Cloudflare OS local state lives under `state/` in the `.wrangler` named volume.
+The archive can contain credentials, account records, chats, and Gadgets. Keep it
+in an owner-only Linux directory, never under `/mnt/c`, and treat it as secret
+material.
 
 ## Consistent backup
 
@@ -25,13 +26,19 @@ ops/home/scripts/backup.sh /home/gpdmini/cloudflare-os-private-backups
 
 Each timestamped directory contains:
 
-- `wrangler.tar`: a numeric-owner archive of the volume.
+- `wrangler.tar`: a numeric-owner archive of the durable `state/` directory.
 - `metadata.txt`: UTC timestamp, upstream/home SHA, dirty state, image name/ID,
   source volume, and normalized Compose hash.
 - `SHA256SUMS`: checksums for the archive and metadata.
 
 The Compose hash is generated from the uninterpolated configuration so secrets do
 not enter metadata. The script never runs `down -v`.
+
+Wrangler also writes disposable development bundles under `.wrangler/tmp/`.
+Those files are deliberately excluded because they can be regenerated and are not
+part of the durable recovery set. `metadata.txt` records
+`archive_scope=wrangler-state-only-v1`, and the restore script extracts only
+`./state` even when reading an older full-volume archive.
 
 For a deliberately stopped non-live volume, use the explicit offline-volume mode.
 It refuses to read the volume if any running container still mounts it. Supply the
@@ -64,12 +71,12 @@ ops/home/scripts/restore-new-volume.sh \
 ```
 
 The script verifies checksums, rejects the live or any existing volume, creates a
-new labeled volume, and extracts only into that empty volume. On failure it leaves
-the new volume for inspection. The short-lived extraction container runs as root
-so it can populate a fresh Docker-owned mount while preserving numeric ownership;
-the application itself remains non-root. A completion marker is written only after
-tar succeeds, and the verification launcher rejects the live volume and any volume
-without that marker. It never deletes a volume automatically.
+new labeled volume, and extracts only `./state` into that empty volume. On failure
+it leaves the new volume for inspection. The short-lived extraction container runs
+as root so it can populate a fresh Docker-owned mount while preserving numeric
+ownership; the application itself remains non-root. A completion marker is written
+only after tar succeeds, and the verification launcher rejects the live volume and
+any volume without that marker. It never deletes a volume automatically.
 
 When restoring the isolated mock backup, pass the same inert environment so the
 source-volume guard is evaluated against `cloudflare-os-inapp-mock-wrangler`:
@@ -99,6 +106,14 @@ Open `http://127.0.0.1:18877` and verify all three with actual records:
 Record redacted evidence and compare the backup metadata to the tested image and
 source. Do not generate paid inference for restore verification.
 
+Do not run the retained source mock stack at the same time as the restore stack.
+Wrangler 4.119.0/workerd is resource-intensive and, during this pilot, sometimes
+exited with a blank Wrangler error when a persisted Gadget preview was opened while
+multiple development stacks were rebuilding workers. Keep the source stack
+stopped, wait for the restore stack to become healthy, and inspect the Cloudflare
+OS restart count before and after the browser check. A successful account/chat/
+tool/Gadget render is required; an automatic restart by itself is not a pass.
+
 The verification stack uses project name `cloudflare-os-home-restore`, LiteLLM
 diagnostics port 14001, a separate pnpm cache, and the explicitly named restored
 `.wrangler` volume. It must not attach the live volume.
@@ -110,6 +125,9 @@ diagnostics port 14001, a separate pnpm cache, and the explicitly named restored
 - Container unhealthy: preserve logs and volume; do not retry extraction into it.
 - Login/chat/Gadget mismatch: keep the verification volume and backup unchanged,
   compare metadata and Wrangler layout, and investigate before another attempt.
+- Blank Wrangler error while opening a Gadget: preserve logs and restart counts,
+  stop unrelated mock development stacks without removing their volumes, then run
+  one controlled verification. Do not loop the browser test indefinitely.
 - Suspected credential exposure: stop remote access, rotate affected keys, and
   treat every private field in the archive as exposed.
 

@@ -76,7 +76,7 @@ docker run --rm -i \
   --user 0:0 \
   --volume "${new_volume}:/restore" \
   "${image_name}" \
-  sh -c 'test -z "$(find /restore -mindepth 1 -maxdepth 1 -print -quit)" && tar --numeric-owner -xpf - -C /restore && touch /restore/.cfos-restore-complete && chown 1000:1000 /restore/.cfos-restore-complete' \
+  sh -c 'test -z "$(find /restore -mindepth 1 -maxdepth 1 -print -quit)" && tar --numeric-owner -xpf - -C /restore ./state && touch /restore/.cfos-restore-complete && chown 1000:1000 /restore/.cfos-restore-complete' \
   <"${backup_dir}/wrangler.tar"
 
 restore_ok=true
