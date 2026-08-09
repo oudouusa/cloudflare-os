@@ -98,9 +98,13 @@ evidence, not evidence that the real model chose and executed the tools.
 
 `check-deepseek-stream-guard.py` must run inside the pinned LiteLLM image after
 the callback is imported. It proves empty-choice DeepSeek metadata chunks are
-ignored by the converter's output-item, reasoning-end, and text-delta helpers.
-The chunk remains available to LiteLLM's stream accumulator; the normal bridge
-and five-turn agent suites prove the guard does not change content-bearing chunks.
+ignored by the converter's output-item, reasoning-end, and text-delta helpers. It
+also proves that completed Chat Completions reasoning is emitted as exactly one
+Responses `response.output_item.added`/`done` pair when the provider omitted an
+initial reasoning delta. The fallback is skipped when LiteLLM already emitted the
+reasoning item. The metadata chunk remains available to LiteLLM's stream
+accumulator; the normal bridge and five-turn agent suites prove the guards do not
+change content-bearing chunks.
 
 ## Runtime acceptance matrix
 
@@ -235,6 +239,7 @@ Completed against official base
 | ASB OAuth preflight | Production `/mcp` returns the protected-resource challenge; same-origin OAuth discovery, dynamic registration metadata, and PKCE S256 pass. The earlier container check used Node fetch, which uses Node's bundled roots and therefore did not prove the separate workerd trust path. |
 | ASB workerd TLS incident | The first Gatekeeper connect attempts failed before OAuth with `unable to get local issuer certificate` and HTTP 502. The ASB chain verified on the host, Node fetch returned the expected 401 both on the host and in the container, and host workerd also returned 401. The digest-pinned `node:22.14.0-bookworm-slim` runtime had no Debian trust store. Copying only `ca-certificates.crt` proved insufficient in a workerd probe, so the home Dockerfile copies the bundle, 280 hashed links, and link targets from the matching digest-pinned full Node image and asserts both the bundle and links exist. A disposable post-rebuild workerd 1.20260801.1 probe then reached the ASB `/mcp` boundary and received the expected HTTP 401 with TLS verification enabled. Final image `sha256:9373312…3c5b` was healthy on the preserved live volume. The owner subsequently completed read consent, added the ASB connection, and attached its capsule in the composer; the later runtime acceptance is recorded below. |
 | ASB read-only runtime acceptance | On 2026-08-09 the owner attached one ASB capsule and initiated one bounded DeepSeek run. Read-only inspection of the persisted conversation proves its `executeCode` wrapper called `env.MCP_AUTONOMOUS_SECOND_BRAIN.memorySearch({ query: "Cloudflare OS", limit: 1 })` exactly once, called no write/capture method, produced an `approved` observation on the same Gatekeeper, and persisted the final message `検索成功`. The code SHA-256 is `fff47a3e…63558c`; the agent run finished `ok`, and all three Responses stages returned HTTP 200. The current grant is the server's complete OAuth read surface (`3 read-only, 0 requiring approval`), not a named-tool-only fragment. It meets the required read-only-search boundary because the read OAuth grant registers no write/capture tools and the capsule was attached only to the requesting conversation; narrowing it to named `memory_search` remains optional defense-in-depth. No search result body was printed or committed. |
+| DeepSeek completed-reasoning fallback | Read-only logs from the successful ASB run revealed repeated provider warnings that older assistant steps lacked `reasoning_content`. LiteLLM's completed response retained the reasoning item, but its streaming converter did not always emit the preceding Responses reasoning `output_item.done` event that Cloudflare OS persists. Compatibility commit `687f593` backfills one added/done pair from the completed response only when no normal reasoning event was emitted. The isolated mock five-turn agent suite now asserts exactly one pair for every completed reasoning item; the direct guard covers duplicate suppression. Config, symlink, secret, Python/Node syntax, lint, full workspace test, build, and isolated bridge/agent suites pass. LiteLLM alone was recreated healthy on the live stack; Cloudflare OS retained container `4ef735c8…f3e5de` and volume `cloudflare-os-home-wrangler`, and both ports remain loopback-only. No real inference was made for this deployment. A fresh real-model conversation is still required to prove the warning is absent in practice. |
 | Optional CLIProxyAPI read-only audit | GreenVPS identity was verified before inspection. CLIProxyAPI v7.2.99 is healthy as a container and publishes 8317 only on the VPS Tailscale address and loopback. From the Cloudflare OS container, unauthenticated `/v1/models` and `/v1/responses` both reached the service and returned 401; no inference occurred. Exact-tag source registers `/v1/responses` and GPT-5.6 models. Authenticated compatibility remains untested because the sole existing key is shared and may not be reused. The VPS was 98% full with about 1.6 GiB free; no cleanup or mutation was performed. |
 | Final 2026-08-09 static rerun | Symlink, one-route/no-fallback config, secret, private-env, shell/Node/Python syntax, base/mock Compose, and diff checks pass. Official `pnpm lint`, `pnpm build`, and `pnpm test` pass; lint/build emit only the same upstream warnings and all executed workspace tests pass with documented skips. |
 | Post-empty-choices full rerun | The runtime guard check, normal/function/five-turn streaming mock suites, base/mock Compose, symlinks, one-route config, private env, 860-file secret scan, shell/Node/Python syntax, and diff checks pass. Official `pnpm lint`, `pnpm build`, and `pnpm test` pass again; only the documented upstream warnings/skips remain. |
@@ -262,7 +267,8 @@ strict suite and the temporary project was removed without touching live volumes
 
 Not yet accepted: a complete post-fix **real-model** DeepSeek in-app normal
 response and real-model-selected Gadget file/tool/test execution.
-The Goal remains incomplete until these are evidenced.
+Use a fresh conversation so historical assistant steps that predate reasoning
+persistence are not replayed. The Goal remains incomplete until these are evidenced.
 
 ## Goal acceptance audit
 
@@ -274,7 +280,7 @@ The Goal remains incomplete until these are evidenced.
 | 1 | Official source and 23 symlinks | Proven | Git ancestry plus exact host/build/image path-target checks |
 | 2 | `main`/`home` separation and sync procedure | Proven | `main` remains at/tracks `upstream/main`; committed `home` tracks `origin/home`; documented sync avoids history rewriting |
 | 3 | Complete home-reference classification | Proven | `home-reference-audit.md` covers every required file group and evidence family |
-| 4 | Real owner-selected OpenCode Go normal and agent tool flow | Partial | Historical GLM proof, strict bridge suites, and the isolated full Cloudflare OS mock all pass. The first two real DeepSeek in-app streams reached HTTP 200 but exposed LiteLLM's empty-choice converter bug; the guarded direct live stream now completes with final `OK`. A post-fix in-app normal response and real-model-selected tool/artifact/test flow remain pending. |
+| 4 | Real owner-selected OpenCode Go normal and agent tool flow | Partial | Historical GLM proof, strict bridge suites, and the isolated full Cloudflare OS mock all pass. The first two real DeepSeek in-app streams reached HTTP 200 but exposed LiteLLM's empty-choice converter bug; the guarded direct live stream now completes with final `OK`. The subsequent ASB tool flow succeeded but exposed missing reasoning replay on older steps, so commit `687f593` now backfills the missing Responses reasoning events and passes mock regression coverage. A fresh post-fix in-app normal response followed by a real-model-selected tool/artifact/test flow remains pending. |
 | 5 | No fallback and Use balance OFF | Proven | Static/runtime one-route proof passes; owner confirmed Use balance OFF on 2026-08-09 and the private ledger records no billing identifier |
 | 6 | Loopback-only host binds | Proven | Docker publishes and `ss` show only 127.0.0.1 on all active diagnostic/application ports |
 | 7 | Tailnet-only Tailscale path | Proven | Approved Serve has one private HTTPS root route and zero Funnel ports. Windows-client HTTP and two independent WSS connections passed before and after app recreate; on 2026-08-09 the owner additionally confirmed login over the Tailscale HTTPS origin, opening an existing chat, and successful browser reload with its state retained. |
