@@ -136,8 +136,8 @@ send, Safari's legacy process-key event (`keyCode === 229`) does not send, and a
 ordinary Enter after composition ends sends exactly once. `imeComposition.test.ts`
 separately covers native, React-wrapped, Safari-legacy, and ordinary Enter events.
 
-The iPhone capsule-loss case still needs one physical-device check because jsdom
-cannot reproduce Mobile Safari's stale selection range:
+Because jsdom cannot reproduce Mobile Safari's stale selection range, the following
+physical-device check is required:
 
 1. Select **No agent** so the check cannot spend model quota.
 2. Attach the read-only ASB connection so its capsule appears in the composer.
@@ -150,6 +150,21 @@ cannot reproduce Mobile Safari's stale selection range:
 Do not capture the ASB search body or account identifiers in evidence. A desktop
 IME run is useful for the send guard, but it does not replace the physical-iPhone
 capsule check.
+
+On 2026-08-09 the owner completed that check on a physical iPhone: the IME
+conversion Enter did not send and the connection capsule remained present.
+
+### iPhone composer focus zoom
+
+The composer keeps its 14px desktop font but uses 16px when both `(hover: none)`
+and `(pointer: coarse)` match. A Chromium check against the compiled CSS reports
+14px at 1440×900 with a fine pointer and 16px at 390×844 with touch emulation.
+The viewport remains `width=device-width, initial-scale=1.0`; the implementation
+does not disable user scaling or pinch zoom. The mirror copies the textarea's
+computed font metrics, so capsules and ordinary glyphs remain aligned.
+
+A physical iPhone must still confirm that tapping the composer no longer changes
+the page scale.
 
 ## Evidence rules
 
@@ -222,7 +237,8 @@ Completed against official base
 | Optional CLIProxyAPI read-only audit | GreenVPS identity was verified before inspection. CLIProxyAPI v7.2.99 is healthy as a container and publishes 8317 only on the VPS Tailscale address and loopback. From the Cloudflare OS container, unauthenticated `/v1/models` and `/v1/responses` both reached the service and returned 401; no inference occurred. Exact-tag source registers `/v1/responses` and GPT-5.6 models. Authenticated compatibility remains untested because the sole existing key is shared and may not be reused. The VPS was 98% full with about 1.6 GiB free; no cleanup or mutation was performed. |
 | Final 2026-08-09 static rerun | Symlink, one-route/no-fallback config, secret, private-env, shell/Node/Python syntax, base/mock Compose, and diff checks pass. Official `pnpm lint`, `pnpm build`, and `pnpm test` pass; lint/build emit only the same upstream warnings and all executed workspace tests pass with documented skips. |
 | Post-empty-choices full rerun | The runtime guard check, normal/function/five-turn streaming mock suites, base/mock Compose, symlinks, one-route config, private env, 860-file secret scan, shell/Node/Python syntax, and diff checks pass. Official `pnpm lint`, `pnpm build`, and `pnpm test` pass again; only the documented upstream warnings/skips remain. |
-| IME/iPhone known-issue fix | Local contrib branch combines upstream PR #94's deferred capsule bookkeeping with PR #82's composition guard, preserving both source commits through `cherry-pick -x`. Two new files add six regression tests; the real React composer proves active-composition Enter and Safari keyCode 229 do not send, then ordinary Enter sends once. Full `pnpm lint`, `pnpm build`, and `pnpm test` pass with only the documented warnings/skips. Image `sha256:67efc008…04ccc0` is healthy with restart count zero, the same Wrangler volume, loopback-only 8877, and the unchanged healthy LiteLLM container; fresh 1440×900 and 390×844 browser-width smoke tests pass. Physical-iPhone capsule retention remains a manual acceptance check. |
+| IME/iPhone known-issue fix | Local contrib branch combines upstream PR #94's deferred capsule bookkeeping with PR #82's composition guard, preserving both source commits through `cherry-pick -x`. Two new files add six regression tests; the real React composer proves active-composition Enter and Safari keyCode 229 do not send, then ordinary Enter sends once. Full `pnpm lint`, `pnpm build`, and `pnpm test` pass with only the documented warnings/skips. Image `sha256:67efc008…04ccc0` is healthy with restart count zero, the same Wrangler volume, loopback-only 8877, and the unchanged healthy LiteLLM container; fresh 1440×900 and 390×844 browser-width smoke tests pass. On 2026-08-09 the owner confirmed on a physical iPhone that conversion Enter did not send and the capsule remained. |
+| iPhone composer focus zoom | The compiled CSS preserves the 14px desktop composer and selects 16px for a touch-first 390×844 browser profile. User scaling remains enabled and the mirrored token layer inherits the same computed font metrics. Full lint/build/test pass with documented warnings/skips only; live deployment and physical-iPhone scale confirmation remain pending. |
 
 The first bridge attempt was made while LiteLLM health was still `starting` and
 reset its connection; the same test passed once healthy. The first restore attempt
