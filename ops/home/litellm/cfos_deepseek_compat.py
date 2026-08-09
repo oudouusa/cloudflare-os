@@ -12,6 +12,7 @@ import os
 from contextvars import ContextVar
 from functools import wraps
 from typing import Any
+from uuid import uuid4
 
 from litellm.integrations.custom_logger import CustomLogger
 
@@ -108,6 +109,99 @@ def _restore_reasoning(data: dict[str, Any], reasoning: dict[str, str]) -> None:
             message["content"] = ""
 
 
+def _object_field(value: object, name: str) -> object:
+    if isinstance(value, dict):
+        return value.get(name)
+    return getattr(value, name, None)
+
+
+def _completed_reasoning_text(response: object) -> str:
+    """Read reasoning retained on a completed Chat Completions response."""
+    choices = _object_field(response, "choices")
+    if not isinstance(choices, list) or not choices:
+        return ""
+    message = _object_field(choices[0], "message")
+    if message is None:
+        return ""
+    for name in ("reasoning_content", "reasoning", "reasoning_text"):
+        value = _object_field(message, name)
+        if isinstance(value, str) and value:
+            return value
+    provider_fields = _object_field(message, "provider_specific_fields")
+    if isinstance(provider_fields, dict):
+        value = provider_fields.get("reasoning_content")
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def _queue_completed_reasoning_fallback(iterator: Any) -> None:
+    """Backfill missing Responses reasoning events from the completed stream.
+
+    Some OpenCode Go streams retain reasoning in the completed Chat Completions
+    message but do not expose an initial ``reasoning_content`` delta. LiteLLM
+    therefore includes the reasoning item only in ``response.completed``. The
+    Cloudflare OS Responses client intentionally persists reasoning only after a
+    matching ``response.output_item.done`` event, so synthesize that event pair
+    before the terminal response. This is a no-op when LiteLLM already emitted
+    reasoning incrementally.
+    """
+    if not _is_deepseek_v4_flash(getattr(iterator, "model", None)):
+        return
+    if getattr(iterator, "_reasoning_done_emitted", False):
+        return
+    pending = getattr(iterator, "_cfos_completed_reasoning_events", None)
+    if isinstance(pending, list) and pending:
+        return
+
+    response = getattr(iterator, "litellm_model_response", None)
+    if response is None:
+        response = iterator.create_litellm_model_response()
+        iterator.litellm_model_response = response
+    reasoning = _completed_reasoning_text(response)
+    if not reasoning:
+        return
+
+    from litellm.types.llms.openai import (
+        BaseLiteLLMOpenAIResponseObject,
+        OutputItemAddedEvent,
+        ResponsesAPIStreamEvents,
+    )
+
+    item_id = (
+        getattr(iterator, "_reasoning_item_id", None)
+        or getattr(iterator, "_cached_reasoning_item_id", None)
+        or f"rs_{uuid4()}"
+    )
+    iterator._reasoning_item_id = item_id
+    iterator._cached_reasoning_item_id = item_id
+
+    iterator._sequence_number += 1
+    added = OutputItemAddedEvent(
+        type=ResponsesAPIStreamEvents.OUTPUT_ITEM_ADDED,
+        output_index=0,
+        item=BaseLiteLLMOpenAIResponseObject(
+            **{
+                "id": item_id,
+                "type": "reasoning",
+                "status": "in_progress",
+                "summary": None,
+            }
+        ),
+    )
+    added.__dict__["sequence_number"] = iterator._sequence_number
+
+    iterator._sequence_number += 1
+    done = iterator.create_reasoning_output_item_done_event(
+        reasoning_item_id=item_id,
+        reasoning_content=reasoning,
+        sequence_number=iterator._sequence_number,
+    )
+    iterator._cfos_completed_reasoning_events = [added, done]
+    iterator._reasoning_done_emitted = True
+    iterator._reasoning_active = False
+
+
 def _install_empty_stream_choices_guard() -> None:
     """Ignore DeepSeek stream metadata chunks that contain no choices.
 
@@ -129,6 +223,7 @@ def _install_empty_stream_choices_guard() -> None:
     original_delta = iterator._get_delta_string_from_streaming_choices
     original_ensure = iterator._ensure_output_item_for_chunk
     original_reasoning_end = iterator._is_reasoning_end
+    original_common_done = iterator.common_done_event_logic
 
     @wraps(original_delta)
     def guarded_delta(self: Any, choices: list[Any]) -> str:
@@ -154,10 +249,20 @@ def _install_empty_stream_choices_guard() -> None:
             return False
         return original_reasoning_end(self, chunk)
 
+    @wraps(original_common_done)
+    def guarded_common_done(self: Any, sync_mode: bool = True) -> Any:
+        _queue_completed_reasoning_fallback(self)
+        pending = getattr(self, "_cfos_completed_reasoning_events", None)
+        if isinstance(pending, list) and pending:
+            return pending.pop(0)
+        return original_common_done(self, sync_mode)
+
     iterator._get_delta_string_from_streaming_choices = guarded_delta
     iterator._ensure_output_item_for_chunk = guarded_ensure
     iterator._is_reasoning_end = guarded_reasoning_end
+    iterator.common_done_event_logic = guarded_common_done
     iterator._cfos_empty_choices_guard_installed = True
+    iterator._cfos_completed_reasoning_fallback_installed = True
 
 
 class CloudflareOsDeepSeekCompat(CustomLogger):

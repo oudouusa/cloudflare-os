@@ -84,6 +84,24 @@ async function streamedResponse(input) {
     .map(data => JSON.parse(data));
   const completed = events.find(event => event.type === "response.completed");
   assert.equal(completed?.response?.status, "completed");
+  const reasoningAdded = events.filter(event =>
+    event.type === "response.output_item.added" && event.item?.type === "reasoning");
+  const reasoningDone = events.filter(event =>
+    event.type === "response.output_item.done" && event.item?.type === "reasoning");
+  const eventShape = events.map(event => `${event.type}:${event.item?.type ?? "-"}`).join(",");
+  const expectedReasoningEvents = completed.response.output.some(item => item.type === "reasoning")
+    ? 1
+    : 0;
+  assert.equal(
+    reasoningAdded.length,
+    expectedReasoningEvents,
+    `stream reasoning item added event count; events=${eventShape}`,
+  );
+  assert.equal(
+    reasoningDone.length,
+    expectedReasoningEvents,
+    `stream reasoning item done event count; events=${eventShape}`,
+  );
   return completed.response;
 }
 

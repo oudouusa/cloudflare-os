@@ -19,4 +19,45 @@ assert iterator._get_delta_string_from_streaming_choices([]) == ""
 assert iterator._ensure_output_item_for_chunk(SimpleNamespace(choices=[])) is None
 assert iterator._is_reasoning_end(SimpleNamespace(choices=[])) is False
 
-print("PASS DeepSeek empty-choices stream metadata is ignored by content helpers")
+assert LiteLLMCompletionStreamingIterator._cfos_completed_reasoning_fallback_installed is True
+iterator.litellm_model_response = SimpleNamespace(
+    choices=[SimpleNamespace(message=SimpleNamespace(reasoning_content="completed reasoning"))]
+)
+iterator._reasoning_done_emitted = False
+iterator._reasoning_active = False
+iterator._reasoning_item_id = None
+iterator._cached_reasoning_item_id = None
+iterator._sequence_number = 0
+cfos_deepseek_compat._queue_completed_reasoning_fallback(iterator)
+fallback_events = iterator._cfos_completed_reasoning_events
+assert [event.type for event in fallback_events] == [
+    "response.output_item.added",
+    "response.output_item.done",
+]
+assert fallback_events[0].item.type == "reasoning"
+assert fallback_events[1].item.type == "reasoning"
+assert fallback_events[1].item.summary[0]["text"] == "completed reasoning"
+
+iterator._cfos_completed_reasoning_events = []
+cfos_deepseek_compat._queue_completed_reasoning_fallback(iterator)
+assert iterator._cfos_completed_reasoning_events == []
+
+wrapper_iterator = object.__new__(LiteLLMCompletionStreamingIterator)
+wrapper_iterator.model = "deepseek-v4-flash"
+wrapper_iterator.litellm_model_response = SimpleNamespace(
+    choices=[SimpleNamespace(message=SimpleNamespace(reasoning_content="wrapper reasoning"))]
+)
+wrapper_iterator._reasoning_done_emitted = False
+wrapper_iterator._reasoning_active = False
+wrapper_iterator._reasoning_item_id = None
+wrapper_iterator._cached_reasoning_item_id = None
+wrapper_iterator._sequence_number = 0
+first = wrapper_iterator.common_done_event_logic(sync_mode=False)
+second = wrapper_iterator.common_done_event_logic(sync_mode=False)
+assert first.type == "response.output_item.added"
+assert second.type == "response.output_item.done"
+assert second.item.summary[0]["text"] == "wrapper reasoning"
+
+print(
+    "PASS DeepSeek stream guards ignore empty metadata and backfill completed reasoning events"
+)
