@@ -163,8 +163,8 @@ The viewport remains `width=device-width, initial-scale=1.0`; the implementation
 does not disable user scaling or pinch zoom. The mirror copies the textarea's
 computed font metrics, so capsules and ordinary glyphs remain aligned.
 
-A physical iPhone must still confirm that tapping the composer no longer changes
-the page scale.
+On 2026-08-09 the owner confirmed on a physical iPhone that tapping the composer
+no longer changes the page scale.
 
 ## Evidence rules
 
@@ -238,7 +238,7 @@ Completed against official base
 | Final 2026-08-09 static rerun | Symlink, one-route/no-fallback config, secret, private-env, shell/Node/Python syntax, base/mock Compose, and diff checks pass. Official `pnpm lint`, `pnpm build`, and `pnpm test` pass; lint/build emit only the same upstream warnings and all executed workspace tests pass with documented skips. |
 | Post-empty-choices full rerun | The runtime guard check, normal/function/five-turn streaming mock suites, base/mock Compose, symlinks, one-route config, private env, 860-file secret scan, shell/Node/Python syntax, and diff checks pass. Official `pnpm lint`, `pnpm build`, and `pnpm test` pass again; only the documented upstream warnings/skips remain. |
 | IME/iPhone known-issue fix | Local contrib branch combines upstream PR #94's deferred capsule bookkeeping with PR #82's composition guard, preserving both source commits through `cherry-pick -x`. Two new files add six regression tests; the real React composer proves active-composition Enter and Safari keyCode 229 do not send, then ordinary Enter sends once. Full `pnpm lint`, `pnpm build`, and `pnpm test` pass with only the documented warnings/skips. Image `sha256:67efc008…04ccc0` is healthy with restart count zero, the same Wrangler volume, loopback-only 8877, and the unchanged healthy LiteLLM container; fresh 1440×900 and 390×844 browser-width smoke tests pass. On 2026-08-09 the owner confirmed on a physical iPhone that conversion Enter did not send and the capsule remained. |
-| iPhone composer focus zoom | The compiled and live-served CSS preserves the 14px desktop composer and selects 16px for a touch-first 390×844 browser profile. User scaling remains enabled and the mirrored token layer inherits the same computed font metrics. Full lint/build/test, 126 home frontend tests, desktop/mobile layout smoke, symlink/config/secret/private-env checks, and loopback binds pass. Image `sha256:78700848…62d0a3` is healthy with restart count zero on the preserved Wrangler volume; LiteLLM stayed in the same healthy container. Physical-iPhone scale confirmation remains pending. |
+| iPhone composer focus zoom | The compiled and live-served CSS preserves the 14px desktop composer and selects 16px for a touch-first 390×844 browser profile. User scaling remains enabled and the mirrored token layer inherits the same computed font metrics. Full lint/build/test, 126 home frontend tests, desktop/mobile layout smoke, symlink/config/secret/private-env checks, and loopback binds pass. Image `sha256:78700848…62d0a3` is healthy with restart count zero on the preserved Wrangler volume; LiteLLM stayed in the same healthy container. On 2026-08-09 the owner confirmed on a physical iPhone that tapping the composer no longer changes the page scale. |
 
 The first bridge attempt was made while LiteLLM health was still `starting` and
 reset its connection; the same test passed once healthy. The first restore attempt
