@@ -114,6 +114,7 @@ and five-turn agent suites prove the guard does not change content-bearing chunk
 | Reload persistence | same chat after browser reload | No additional call |
 | Restart persistence | account/chat/Gadget after container restart | No additional call |
 | Mobile width | basic navigation at a mobile viewport | No |
+| iPhone IME | conversion Enter does not send; attached connection capsule remains visible | No |
 | Minimal Gadget | Gadget opens and persists | Prefer mock until real agent test |
 | Agentic execution | model tool call, resulting file, and actual test output | Yes, once |
 | Backup/restore | checksum, new volume, owner/chat/Gadget present | No |
@@ -126,6 +127,29 @@ and five-turn agent suites prove the guard does not change content-bearing chunk
 
 Chat text alone does not prove a tool ran. Agentic acceptance needs the tool name or
 structured event, a changed artifact, and a test result that reads that artifact.
+
+### IME and Mobile Safari regression
+
+`ChatInterface.ime.test.tsx` dispatches composition events against the real React
+composer. It proves that the Enter used to confirm an active Japanese IME does not
+send, Safari's legacy process-key event (`keyCode === 229`) does not send, and an
+ordinary Enter after composition ends sends exactly once. `imeComposition.test.ts`
+separately covers native, React-wrapped, Safari-legacy, and ordinary Enter events.
+
+The iPhone capsule-loss case still needs one physical-device check because jsdom
+cannot reproduce Mobile Safari's stale selection range:
+
+1. Select **No agent** so the check cannot spend model quota.
+2. Attach the read-only ASB connection so its capsule appears in the composer.
+3. Enter Japanese next to (but not inside) the capsule and press Enter to confirm a
+   conversion candidate.
+4. Confirm that the message was not sent and that the capsule is still visible.
+5. Press an ordinary Enter after composition has ended and confirm exactly one
+   no-agent message is added.
+
+Do not capture the ASB search body or account identifiers in evidence. A desktop
+IME run is useful for the send guard, but it does not replace the physical-iPhone
+capsule check.
 
 ## Evidence rules
 
@@ -198,6 +222,7 @@ Completed against official base
 | Optional CLIProxyAPI read-only audit | GreenVPS identity was verified before inspection. CLIProxyAPI v7.2.99 is healthy as a container and publishes 8317 only on the VPS Tailscale address and loopback. From the Cloudflare OS container, unauthenticated `/v1/models` and `/v1/responses` both reached the service and returned 401; no inference occurred. Exact-tag source registers `/v1/responses` and GPT-5.6 models. Authenticated compatibility remains untested because the sole existing key is shared and may not be reused. The VPS was 98% full with about 1.6 GiB free; no cleanup or mutation was performed. |
 | Final 2026-08-09 static rerun | Symlink, one-route/no-fallback config, secret, private-env, shell/Node/Python syntax, base/mock Compose, and diff checks pass. Official `pnpm lint`, `pnpm build`, and `pnpm test` pass; lint/build emit only the same upstream warnings and all executed workspace tests pass with documented skips. |
 | Post-empty-choices full rerun | The runtime guard check, normal/function/five-turn streaming mock suites, base/mock Compose, symlinks, one-route config, private env, 860-file secret scan, shell/Node/Python syntax, and diff checks pass. Official `pnpm lint`, `pnpm build`, and `pnpm test` pass again; only the documented upstream warnings/skips remain. |
+| IME/iPhone known-issue fix | Local contrib branch combines upstream PR #94's deferred capsule bookkeeping with PR #82's composition guard, preserving both source commits through `cherry-pick -x`. Two new files add six regression tests; the real React composer proves active-composition Enter and Safari keyCode 229 do not send, then ordinary Enter sends once. Full `pnpm lint`, `pnpm build`, and `pnpm test` pass with only the documented warnings/skips. Physical-iPhone capsule retention remains a manual acceptance check. |
 
 The first bridge attempt was made while LiteLLM health was still `starting` and
 reset its connection; the same test passed once healthy. The first restore attempt
