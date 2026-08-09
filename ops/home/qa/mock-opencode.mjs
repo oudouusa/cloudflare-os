@@ -22,7 +22,7 @@ function chatCompletion(message, finishReason = "stop") {
   };
 }
 
-function sendCompletion(response, payload, message, finishReason = "stop") {
+function sendCompletion(response, payload, message, finishReason = "stop", options = {}) {
   if (!payload.stream) {
     sendJson(response, 200, chatCompletion(message, finishReason));
     return;
@@ -43,6 +43,13 @@ function sendCompletion(response, payload, message, finishReason = "stop") {
     "cache-control": "no-cache",
     connection: "keep-alive",
   });
+  if (options.roleFirst) {
+    response.write(`data: ${JSON.stringify({
+      ...base,
+      choices: [{ index: 0, delta: { role: delta.role }, finish_reason: null }],
+    })}\n\n`);
+    delete delta.role;
+  }
   response.write(`data: ${JSON.stringify({
     ...base,
     choices: [{ index: 0, delta, finish_reason: null }],
@@ -229,7 +236,17 @@ const server = createServer((request, response) => {
       .join("\n");
     const isAgentFlow = userText.includes("CFOS_MOCK_AGENT");
     const isNormalFlow = !isAgentFlow && userText.includes("CFOS_MOCK_NORMAL");
+    const isLateReasoningFlow = userText.includes("CFOS_MOCK_LATE_REASONING");
     const hasAvailableTools = Boolean(payload.tools?.length);
+
+    if (isLateReasoningFlow) {
+      sendCompletion(response, payload, {
+        role: "assistant",
+        content: "MOCK_LATE_REASONING_COMPLETE",
+        reasoning_content: REASONING,
+      }, "stop", { roleFirst: true });
+      return;
+    }
 
     // Cloudflare OS also uses the selected quick model for short metadata
     // requests such as thread and Gadget titles. Those requests contain the
@@ -293,7 +310,8 @@ const server = createServer((request, response) => {
       sendCompletion(response, payload, {
         role: "assistant",
         content: "MOCK_NORMAL_COMPLETE: Cloudflare OS streaming chat succeeded.",
-      });
+        reasoning_content: REASONING,
+      }, "stop", { roleFirst: true });
       return;
     }
 

@@ -28,12 +28,15 @@ iterator._reasoning_active = False
 iterator._reasoning_item_id = None
 iterator._cached_reasoning_item_id = None
 iterator._sequence_number = 0
+iterator._next_tool_output_index = 1
 cfos_deepseek_compat._queue_completed_reasoning_fallback(iterator)
 fallback_events = iterator._cfos_completed_reasoning_events
 assert [event.type for event in fallback_events] == [
     "response.output_item.added",
     "response.output_item.done",
 ]
+assert [event.output_index for event in fallback_events] == [1, 1]
+assert iterator._next_tool_output_index == 2
 assert fallback_events[0].item.type == "reasoning"
 assert fallback_events[1].item.type == "reasoning"
 assert fallback_events[1].item.summary[0]["text"] == "completed reasoning"
@@ -52,10 +55,12 @@ wrapper_iterator._reasoning_active = False
 wrapper_iterator._reasoning_item_id = None
 wrapper_iterator._cached_reasoning_item_id = None
 wrapper_iterator._sequence_number = 0
+wrapper_iterator._next_tool_output_index = 1
 first = wrapper_iterator.common_done_event_logic(sync_mode=False)
 second = wrapper_iterator.common_done_event_logic(sync_mode=False)
 assert first.type == "response.output_item.added"
 assert second.type == "response.output_item.done"
+assert first.output_index == second.output_index == 1
 assert second.item.summary[0]["text"] == "wrapper reasoning"
 
 print(

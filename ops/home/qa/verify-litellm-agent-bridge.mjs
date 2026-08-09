@@ -1,4 +1,14 @@
 import assert from "node:assert/strict";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const piSharedUrl = pathToFileURL(
+  resolve(
+    "packages/workshop-backend/node_modules/@earendil-works/pi-ai/" +
+    "dist/api/openai-responses-shared.js",
+  ),
+);
+const { processResponsesStream } = await import(piSharedUrl.href);
 
 const baseUrl = process.env.QA_LITELLM_BASE_URL ?? "http://127.0.0.1:14002/v1";
 const masterKey = process.env.QA_LITELLM_MASTER_KEY ?? "sk-litellm-mock-only";
@@ -59,7 +69,45 @@ async function stats() {
   return response.json();
 }
 
-async function streamedResponse(input) {
+async function parseWithProductionPi(events) {
+  const output = {
+    role: "assistant",
+    content: [],
+    api: "openai-responses",
+    provider: "openai",
+    model: "deepseek-v4-flash",
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop",
+    timestamp: Date.now(),
+  };
+  const model = {
+    id: "deepseek-v4-flash",
+    name: "Mock DeepSeek V4 Flash",
+    api: "openai-responses",
+    provider: "openai",
+    baseUrl: baseUrl,
+    reasoning: true,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 131_072,
+    maxTokens: 8_192,
+  };
+  const emitted = [];
+  async function* eventStream() {
+    yield* events;
+  }
+  await processResponsesStream(eventStream(), output, { push: event => emitted.push(event) }, model);
+  return output;
+}
+
+async function streamedResponse(input, availableTools = tools, verifyPiSingleText = false) {
   const response = await fetch(`${baseUrl}/responses`, {
     method: "POST",
     headers: {
@@ -69,7 +117,7 @@ async function streamedResponse(input) {
     body: JSON.stringify({
       model: "deepseek-v4-flash",
       input,
-      tools,
+      tools: availableTools,
       stream: true,
     }),
   });
@@ -89,6 +137,43 @@ async function streamedResponse(input) {
   const reasoningDone = events.filter(event =>
     event.type === "response.output_item.done" && event.item?.type === "reasoning");
   const eventShape = events.map(event => `${event.type}:${event.item?.type ?? "-"}`).join(",");
+  const activeItemsByIndex = new Map();
+  for (const event of events) {
+    if (event.type === "response.output_item.added") {
+      assert.equal(
+        activeItemsByIndex.has(event.output_index),
+        false,
+        `output_index ${event.output_index} reused before its item completed; events=${eventShape}`,
+      );
+      activeItemsByIndex.set(event.output_index, {
+        id: event.item?.id,
+        type: event.item?.type,
+      });
+    } else if (event.type === "response.output_item.done") {
+      const active = activeItemsByIndex.get(event.output_index);
+      if (!active) {
+        const emptyTerminalMessage = event.item?.type === "message" &&
+          (event.item.content ?? []).every(part => !part.text);
+        assert.equal(
+          emptyTerminalMessage,
+          true,
+          `output_index ${event.output_index} completed without a matching added event; events=${eventShape}`,
+        );
+        continue;
+      }
+      assert.deepEqual(
+        { id: event.item?.id, type: event.item?.type },
+        active,
+        `output_index ${event.output_index} completed a different item; events=${eventShape}`,
+      );
+      activeItemsByIndex.delete(event.output_index);
+    }
+  }
+  assert.equal(
+    activeItemsByIndex.size,
+    0,
+    `stream ended with unfinished output items; events=${eventShape}`,
+  );
   const expectedReasoningEvents = completed.response.output.some(item => item.type === "reasoning")
     ? 1
     : 0;
@@ -102,10 +187,43 @@ async function streamedResponse(input) {
     expectedReasoningEvents,
     `stream reasoning item done event count; events=${eventShape}`,
   );
+  if (verifyPiSingleText) {
+    const parsed = await parseWithProductionPi(events);
+    const parsedText = parsed.content.filter(block => block.type === "text").map(block => block.text);
+    const responseText = completed.response.output
+      .filter(item => item.type === "message")
+      .flatMap(item => item.content ?? [])
+      .filter(item => item.type === "output_text")
+      .map(item => item.text);
+    assert.deepEqual(parsedText, responseText, "production pi parser must emit final text exactly once");
+    assert.equal(
+      parsed.content.filter(block => block.type === "thinking").length,
+      expectedReasoningEvents,
+      "production pi parser reasoning block count",
+    );
+  }
   return completed.response;
 }
 
 const before = await stats();
+const lateReasoningResponse = await streamedResponse(
+  "CFOS_MOCK_LATE_REASONING deterministic late-reasoning QA",
+  [],
+  true,
+);
+assert.equal(
+  lateReasoningResponse.output.filter(item => item.type === "reasoning").length,
+  1,
+  "late-reasoning response reasoning item count",
+);
+assert.equal(
+  lateReasoningResponse.output
+    .filter(item => item.type === "message")
+    .flatMap(item => item.content ?? [])
+    .filter(item => item.type === "output_text").map(item => item.text).join(""),
+  "MOCK_LATE_REASONING_COMPLETE",
+  "late-reasoning response text must not be duplicated",
+);
 const userMessage = {
   role: "user",
   content: [{ type: "input_text", text: "CFOS_MOCK_AGENT deterministic agent bridge QA" }],
@@ -137,9 +255,9 @@ const finalText = finalResponse.output
 assert.equal(finalText, "MOCK_AGENT_COMPLETE: Gadget files created and artifact test passed.");
 
 const after = await stats();
-assert.equal(after.chatCompletionRequests - before.chatCompletionRequests, 5);
+assert.equal(after.chatCompletionRequests - before.chatCompletionRequests, 6);
 assert.equal(after.compatibilityFailures - before.compatibilityFailures, 0);
 console.log(
-    "PASS five-turn streaming agent bridge preserved reasoning and emitted " +
-    "createGadget, writeFile x2, executeCode, then final text",
+    "PASS late-reasoning text was singular and five-turn agent bridge preserved reasoning, " +
+    "then emitted createGadget, writeFile x2, executeCode, and final text",
 );

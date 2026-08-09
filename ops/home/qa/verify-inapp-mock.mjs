@@ -77,6 +77,12 @@ async function bodyText() {
   return page.locator("body").innerText();
 }
 
+async function assertMarkerOccursOnce(marker, label) {
+  const text = await bodyText();
+  const occurrences = text.split(marker).length - 1;
+  assert.equal(occurrences, 1, `${label} marker occurrence count`);
+}
+
 async function signUpOrSignIn() {
   const response = await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
   assert.equal(response?.ok(), true, "Cloudflare OS navigation failed");
@@ -234,9 +240,11 @@ try {
     }, null, 2));
   } else {
     const normalUrl = await sendNewConversation(normalPrompt, normalMarker, 90_000);
+    await assertMarkerOccursOnce(normalMarker, "streaming normal response");
     await screenshot("03-normal-chat");
     await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.getByText(normalMarker, { exact: false }).last().waitFor({ timeout: 90_000 });
+    await assertMarkerOccursOnce(normalMarker, "reloaded normal response");
     await screenshot("04-normal-reload");
 
     const agentUrl = await sendFollowUp(agentPrompt, agentMarker, 180_000);

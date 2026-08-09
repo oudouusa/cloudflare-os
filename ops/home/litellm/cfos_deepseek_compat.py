@@ -176,10 +176,22 @@ def _queue_completed_reasoning_fallback(iterator: Any) -> None:
     iterator._reasoning_item_id = item_id
     iterator._cached_reasoning_item_id = item_id
 
+    # LiteLLM reserves output_index 0 for the streamed assistant message and
+    # assigns function calls from _next_tool_output_index upward. Reusing 0 for
+    # a late reasoning item replaces the message slot in Responses clients; the
+    # later message done event is then treated as a second text block. Reserve
+    # the next free index so the reasoning item cannot collide with a message or
+    # an already-streamed tool call.
+    try:
+        output_index = max(1, int(getattr(iterator, "_next_tool_output_index", 1)))
+    except (TypeError, ValueError):
+        output_index = 1
+    iterator._next_tool_output_index = output_index + 1
+
     iterator._sequence_number += 1
     added = OutputItemAddedEvent(
         type=ResponsesAPIStreamEvents.OUTPUT_ITEM_ADDED,
-        output_index=0,
+        output_index=output_index,
         item=BaseLiteLLMOpenAIResponseObject(
             **{
                 "id": item_id,
@@ -197,6 +209,7 @@ def _queue_completed_reasoning_fallback(iterator: Any) -> None:
         reasoning_content=reasoning,
         sequence_number=iterator._sequence_number,
     )
+    done.output_index = output_index
     iterator._cfos_completed_reasoning_events = [added, done]
     iterator._reasoning_done_emitted = True
     iterator._reasoning_active = False
