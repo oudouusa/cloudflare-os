@@ -33,6 +33,25 @@ Each timestamped directory contains:
 The Compose hash is generated from the uninterpolated configuration so secrets do
 not enter metadata. The script never runs `down -v`.
 
+For a deliberately stopped non-live volume, use the explicit offline-volume mode.
+It refuses to read the volume if any running container still mounts it. Supply the
+actual Compose project and overlay so their normalized configuration is recorded;
+this avoids stopping or hashing the live stack by mistake. For the retained in-app
+mock evidence volume:
+
+```bash
+CFOS_ENV_FILE="$PWD/ops/home/qa/mock.env" \
+CFOS_BACKUP_OFFLINE_VOLUME=true \
+CFOS_COMPOSE_PROJECT_NAME=cloudflare-os-deepseek-mock \
+CFOS_COMPOSE_OVERRIDE_FILE="$PWD/ops/home/qa/compose.mock.yaml" \
+ops/home/scripts/backup.sh /home/gpdmini/cloudflare-os-mock-private-backups
+```
+
+The source metadata records `offline_source=true`, the project, both Compose
+files, and the isolated source volume. Never use this mode to bypass a running
+volume: the script checks Docker's actual mounts rather than trusting Compose
+state.
+
 ## Restore into a new volume
 
 Never restore directly into `cloudflare-os-home-wrangler`. Pick a unique volume
@@ -51,6 +70,16 @@ so it can populate a fresh Docker-owned mount while preserving numeric ownership
 the application itself remains non-root. A completion marker is written only after
 tar succeeds, and the verification launcher rejects the live volume and any volume
 without that marker. It never deletes a volume automatically.
+
+When restoring the isolated mock backup, pass the same inert environment so the
+source-volume guard is evaluated against `cloudflare-os-inapp-mock-wrangler`:
+
+```bash
+CFOS_ENV_FILE="$PWD/ops/home/qa/mock.env" \
+ops/home/scripts/restore-new-volume.sh \
+  /home/gpdmini/cloudflare-os-mock-private-backups/TIMESTAMP \
+  cloudflare-os-home-restore-TIMESTAMP-mock
+```
 
 ## Verify on isolated ports
 
