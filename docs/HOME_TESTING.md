@@ -149,7 +149,7 @@ Completed against official base
 | Final image | Current rebuilt manifest `sha256:fe0b6c57b6ab9bbb6b9c00aa5d1cd562a756453a051d6cd0c6c72b6246e5db0b`, 404,136,718 bytes; Docker reused the previously verified application COPY/build layers |
 | Toolchain in image | Node 22.14.0, pnpm 11.17.0, Wrangler 4.119.0 |
 | Symlinks | Exact 23 paths/targets pass on host, at build time, and in final image |
-| Secret scan | Pass over 855 tracked/untracked non-ignored candidate files |
+| Secret scan | Pass over 859 tracked/untracked non-ignored candidate files after the optional CLIProxyAPI audit documentation |
 | LiteLLM mock bridge | Catalog, text, function call, reasoning replay/function output, and exact dispatch-count assertions pass |
 | Main runtime | HTTP 200; Cloudflare OS and LiteLLM healthy; host ports 8877/4001 loopback-only |
 | Gatekeeper URL | Runtime logs show MCP and other Gatekeepers derived from `http://127.0.0.1:8877` |
@@ -182,6 +182,7 @@ Completed against official base
 | Owner-state backup | Clean committed `home` SHA `3e63fef…`, exact live volume, owner-only permissions, and both checksums pass for `/home/gpdmini/cloudflare-os-private-backups/20260808T213024Z` |
 | Owner-state restore | New retained volume `cloudflare-os-home-restore-20260808t213024z-owner` starts healthy on loopback port 18877; closed signup and desktop/mobile browser checks pass; live and restored state each contain one User DO, the same single model key, and two session records without reading values |
 | ASB OAuth preflight | Production `/mcp` returns the protected-resource challenge; same-origin OAuth discovery, dynamic registration metadata, and PKCE S256 pass; the Cloudflare OS container reaches the same 401 boundary without a credential |
+| Optional CLIProxyAPI read-only audit | GreenVPS identity was verified before inspection. CLIProxyAPI v7.2.99 is healthy as a container and publishes 8317 only on the VPS Tailscale address and loopback. From the Cloudflare OS container, unauthenticated `/v1/models` and `/v1/responses` both reached the service and returned 401; no inference occurred. Exact-tag source registers `/v1/responses` and GPT-5.6 models. Authenticated compatibility remains untested because the sole existing key is shared and may not be reused. The VPS was 98% full with about 1.6 GiB free; no cleanup or mutation was performed. |
 | Final 2026-08-09 static rerun | Symlink, one-route/no-fallback config, secret, private-env, shell/Node/Python syntax, base/mock Compose, and diff checks pass. Official `pnpm lint`, `pnpm build`, and `pnpm test` pass; lint/build emit only the same upstream warnings and all executed workspace tests pass with documented skips. |
 
 The first bridge attempt was made while LiteLLM health was still `starting` and
@@ -228,3 +229,9 @@ The Goal remains incomplete until these are evidenced.
 | 11 | lint/build/test/Compose/Docker/secret suite | Proven | Current ledger results plus final static rerun |
 | 12 | Early Access development-pilot wording | Proven | README, architecture, operations, and security documents explicitly reject production wording |
 | 13 | Approved first fork/push | Proven | Owner explicitly approved; verified fork has exact `main`/`home` heads and no PR, release, force-push, or upstream write was made |
+
+The optional CLIProxyAPI/Codex direct route is deferred after read-only network,
+authentication-boundary, and exact-source compatibility checks. A new dedicated
+key, explicit GreenVPS change approval, and bounded authenticated runtime proof are
+still required. This optional route does not block the OpenCode Go MVP and must not
+be allowed to become its fallback.

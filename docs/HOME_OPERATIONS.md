@@ -147,6 +147,30 @@ for it. Cloudflare OS additionally enforces the named-tool fragment, so choosing
 only `memory_search` prevents later read tools from silently widening this binding.
 Disconnect the resource from the conversation after acceptance.
 
+## Optional GreenVPS CLIProxyAPI activation gate
+
+The 2026-08-09 read-only audit proves that the Cloudflare OS container can reach
+the existing CLIProxyAPI authentication boundary over Tailscale. It does not
+authorize use of the service. Do not inspect or reuse its sole existing API key.
+Before enabling the optional Codex route:
+
+1. Present the exact GreenVPS configuration change, dedicated-key scope, impact,
+   and rollback procedure to the owner.
+2. Obtain explicit approval before creating the key or changing the VPS.
+3. Verify authenticated `/v1/models` and `/v1/responses` compatibility with a
+   bounded call budget, without printing the credential or response content into
+   durable logs.
+4. Add Codex directly to Cloudflare OS as a manual model; do not route it through
+   LiteLLM and do not configure automatic fallback in either direction.
+5. Re-run the loopback/Tailscale exposure and secret scans, then document the
+   actual context limits measured through this service.
+
+The VPS root filesystem was 98% used with about 1.6 GiB free at audit time. Treat
+that as a change freeze for this optional route until capacity is separately
+addressed. No cleanup, image update, configuration edit, or restart was authorized
+or performed. Disk cleanup and a CLIProxyAPI upgrade are separate operations and
+must not be bundled into key creation.
+
 ## Short and long soak
 
 `ops/home/scripts/soak.sh` checks health and restart counts without generating

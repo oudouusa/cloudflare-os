@@ -99,8 +99,28 @@ The proxy version and conversion behavior were checked against the official
 container remains digest-pinned even if that tag is later moved.
 
 There is exactly one route, no provider fallback, no paid OpenAI API fallback, no
-automatic retry, and initial concurrency one. A future CLIProxyAPI/Codex route is
-independent, direct from Cloudflare OS, manually selected, and outside MVP.
+automatic retry, and initial concurrency one.
+
+## Optional CLIProxyAPI/Codex boundary
+
+The existing GreenVPS service was audited read-only on 2026-08-09. It runs
+CLIProxyAPI v7.2.99, publishes port 8317 only on its Tailscale address and VPS
+loopback, and is reachable from the Cloudflare OS container. Unauthenticated
+`/v1/models` and `/v1/responses` requests both returned 401, proving the network
+path and authentication boundary without making an inference. Source inspection
+of the exact upstream
+[v7.2.99 tag](https://github.com/router-for-me/CLIProxyAPI/tree/v7.2.99)
+confirms an OpenAI-compatible `/v1/responses` route and GPT-5.6 model definitions.
+This is compatibility evidence, not an authenticated runtime or model-call proof.
+
+The service currently has one configured API key. It is an existing shared
+credential and must not be read, copied, or reused by Cloudflare OS. Optional
+activation therefore remains deferred until the owner approves a VPS change and
+a dedicated Cloudflare OS key with a documented rollback. If activated, Codex is
+a direct, manually selected Cloudflare OS route, never a LiteLLM fallback. It must
+not automatically fall back to or from OpenCode Go, and its initial local model
+limits remain conservative at 200,000 input / 16,384 output tokens until measured.
+No VPS configuration, container, image, or credential changed during this audit.
 
 ## ASB boundary
 
