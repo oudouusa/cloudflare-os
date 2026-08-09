@@ -13,6 +13,8 @@ is treated as an Internet-facing production security boundary.
   `no-new-privileges`. A network-isolated one-shot init container receives only
   `CHOWN` so new/restored volumes can be handed to UID 1000 before Cloudflare OS starts.
 - Docker JSON logs rotate at 10 MiB with three files per service.
+- The Cloudflare OS image contains a digest-pinned standard CA bundle for
+  workerd's outbound HTTPS. TLS certificate verification is never disabled.
 - No Cloudflare Workers, KV, D1, R2, AI Gateway, or other account resource is created.
 
 After the owner's first account is created, an administrator must disable new

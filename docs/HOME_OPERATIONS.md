@@ -129,6 +129,14 @@ The preflight sends only unauthenticated GET requests. It verifies the expected
 client registration metadata, and PKCE S256. It does not register a client, open
 the authorization page, create a grant, or call a memory tool.
 
+If **Connect MCP Server** reports `internal error; reference = ...`, inspect the
+Cloudflare OS logs for the same reference. A paired `TLS peer's certificate is not
+trusted` / `unable to get local issuer certificate` message means workerd could not
+load its system CA trust store; it is not evidence of an OAuth scope failure. The
+home image must contain a non-empty `/etc/ssl/certs/ca-certificates.crt` plus
+Debian's hashed certificate links under `/etc/ssl/certs`; the bundle alone does not
+satisfy workerd. Never work around this by disabling certificate verification.
+
 Complete the owner-only UI flow over the approved Tailscale HTTPS origin. The
 Connections panel belongs to a Gadget/workspace; it is not a global Settings item:
 
